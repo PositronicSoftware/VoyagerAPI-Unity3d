@@ -1,0 +1,46 @@
+## Maya
+.mayaSwatches/*
+
+## OSX
+*.DS_Store
+*.pbxuser
+profile
+
+## Open Office
+*.~lock.*
+
+## Photoshop
+*.swatch
+
+## PlayStation 4
+*.gp4
+
+## Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+## Unity3d
+*.csproj
+*.pidb
+*.unityproj
+Builds/*
+Exports/*
+Library/*
+Obj/*
+Screenshots/*
+Temp/*
+
+## Visual Studio
+*.sln
+*.suo
+*.userprefs
+*.VC.db
+.settings/*
+.vs/*
+
+## VS Code
+*.vscode/
+
+## Windows
+ehthumbs.db
+Thumbs.db
