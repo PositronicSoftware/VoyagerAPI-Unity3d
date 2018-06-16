@@ -56,10 +56,6 @@ namespace Positron
 				gameObject.AddComponent<VoyagerDevice>();
 			}
 
-			VoyagerDeviceConfig deviceConfig = VoyagerDeviceUtils.LoadDeviceConfigFile("Config", "InterfaceConfig.json", VoyagerDeviceConfigId.VDC_Default);
-
-			VoyagerDevice.Init(deviceConfig);
-
 			if( XRDevice.isPresent
 				&& XRSettings.enabled )
 			{
@@ -73,9 +69,22 @@ namespace Positron
 		IEnumerator Start()
 		{
 			// Make sure we have an instance of the Positron interface before we do anything else
-			while( VoyagerDevice.Instance == null || !VoyagerDevice.IsInitialized )
+			while( VoyagerDevice.Instance == null )
 			{
 				yield return null;
+			}
+
+			// Load config from file
+			VoyagerDeviceConfig config = VoyagerDeviceUtils.LoadDeviceConfigFile("Config", "InterfaceConfig.json");
+
+			// Initialize interface
+			VoyagerDevice.Init(config);
+
+			// Quick Exit: Not initialized
+			if( !VoyagerDevice.IsInitialized )
+			{
+				Debug.LogError("VoyagerDevice not initialized.");
+				yield break;
 			}
 
 			// Set the Positron Interface content here so it is only receiving data for this application

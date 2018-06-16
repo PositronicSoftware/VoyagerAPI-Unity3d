@@ -111,7 +111,7 @@ namespace Positron
 		 *
 		 * Editor uses Application.streamingAssetsPath - Ex: VoyagerDemo\Assets\StreamingAssets\Config\VoyagerDevice.json
 		 */
-		public static VoyagerDeviceConfig LoadDeviceConfigFile(string dirName, string fileName, VoyagerDeviceConfigId settingId)
+		public static VoyagerDeviceConfig LoadDeviceConfigFile(string dirName, string fileName, VoyagerDeviceConfigId settingId = VoyagerDeviceConfigId.VDC_Default)
 		{
 			VoyagerDeviceConfig result = new VoyagerDeviceConfig();
 			string configPath = Path.Combine(dirName, fileName);
