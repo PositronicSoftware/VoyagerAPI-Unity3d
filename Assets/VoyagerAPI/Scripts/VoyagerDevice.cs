@@ -811,7 +811,7 @@ namespace Positron
 									Recenter();
 								}
 
-								if( !string.IsNullOrEmpty(receivedPacket.@event.url) && IsContentLoaded )
+								if( /*!string.IsNullOrEmpty(receivedPacket.@event.url) &&*/ IsContentLoaded )
 								{
 									if( receivedPacket.@event.playPause == IsPaused )
 									{
