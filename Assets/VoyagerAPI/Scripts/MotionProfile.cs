@@ -37,7 +37,19 @@ namespace Positron
 			}
 		}
 
-		void Update()
+        void Start()
+        {
+            if (!string.IsNullOrEmpty(_profileName)
+                    && Application.isPlaying
+                    && VoyagerDevice.MotionProfile != _profileName
+                    && VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop)
+            {
+                VoyagerDevice.SetMotionProfile(_profileName);
+            }
+        }
+
+
+            void Update()
 		{
 			if( !VoyagerDevice.IsUpdated && VoyagerDevice.IsInitialized )
 			{

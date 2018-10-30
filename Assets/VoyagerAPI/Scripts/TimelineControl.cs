@@ -127,7 +127,6 @@ namespace Positron
 			{
 				director.time = ((double)(time / 1000));
 				director.Evaluate();
-				director.Play();
 				VoyagerDevice.SendTime((int)(time));
 			}
 			else
@@ -152,20 +151,26 @@ namespace Positron
 
 		public bool IsPlaying()
 		{
-			return (Time.timeScale == 1f);
-		}
+			return (Time.timeScale == 1f && director != null && director.state == PlayState.Playing);
+        }
 
-		public void Play()
+        public void Play()
 		{
 			if( director != null )
 			{
-				// director.Resume();
-				if( director.state == PlayState.Playing )
-				{
-					director.playableGraph.GetRootPlayable(0).SetSpeed(1);
-				}
+                // director.Resume();
+                if (director.state == PlayState.Playing)
+                {
+                    director.playableGraph.GetRootPlayable(0).SetSpeed(1);
+                }
+                else
+                {
+                    director.Play();
+                    director.playableGraph.GetRootPlayable(0).SetSpeed(1);
+                    Debug.Log("Playing director");
+                }
 
-				VoyagerDevice.SendTime((int)GetTime());
+                VoyagerDevice.SendTime((int)GetTime());
 				// Interface.Play();
 
 				playButton2D.image.sprite = pauseSprite2D;
@@ -180,11 +185,12 @@ namespace Positron
 		{
 			if( director != null )
 			{
-				// director.Pause();
+				//director.Pause();
 				if( director.state == PlayState.Playing )
 				{
 					director.playableGraph.GetRootPlayable(0).SetSpeed(0);
-				}
+                    director.Pause();
+                }
 
 				VoyagerDevice.SendTime((int)GetTime());
 				// Interface.Pause();
@@ -300,22 +306,28 @@ namespace Positron
 
 		public void OnVideoSliderDown2D()
 		{
-			wasPlayingOnScrub = IsPlaying();
-			if( wasPlayingOnScrub )
+			wasPlayingOnScrub = (director.state == PlayState.Playing);
+
+			Seek(videoSeekSlider2D.value * GetDuration());
+
+			if ( wasPlayingOnScrub )
 			{
 				Pause();
 			}
-			OnVideoSeekSlider2D();
+
 		}
 
 		public void OnVideoSliderUp()
 		{
-			if( wasPlayingOnScrub )
+            Seek(videoSeekSlider2D.value * GetDuration());
+
+			if ( wasPlayingOnScrub )
 			{
 				Play();
+
 				wasPlayingOnScrub = false;
 			}
-		}
+        }
 
 		// Toggle the menu
 		public void ToggleMenu()
@@ -377,7 +389,8 @@ namespace Positron
 						Play();
 					}
 
-					if( VoyagerDevice.IsPaused && IsPlaying())
+					if( VoyagerDevice.IsPaused && IsPlaying() 
+                    || VoyagerDevice.IsPaused && Time.timeScale == 0f && director != null && director.state == PlayState.Playing)
 					{
 						Pause();
 					}
@@ -399,11 +412,14 @@ namespace Positron
 
 			if( director != null )
 			{
+
 				duration2DText.text = ConvertTime((int)GetDuration());
 
 				// Set Bottom UI to zero position
 				pos = Vector2.zero;
-			}
+
+                playButton2D.image.sprite = (director.state == PlayState.Playing ? pauseSprite2D : playSprite2D);
+            }
 			else
 			{
 				Debug.LogError("Need a PlayableDirector");

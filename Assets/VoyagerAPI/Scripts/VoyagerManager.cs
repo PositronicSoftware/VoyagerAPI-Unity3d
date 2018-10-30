@@ -15,7 +15,7 @@ namespace Positron
 		private float previousTimeScale = 1f;
 
 		// Path for this application's executable
-		private string path;
+		[SerializeField] private string path;
 
 		// Bool to check to see if audio is muted
 		private bool _mute = false;
@@ -77,6 +77,7 @@ namespace Positron
 			{
 				if( Time.timeScale != 0f )
 				{
+                   
 					previousTimeScale = Time.timeScale;
 				}
 
@@ -178,27 +179,33 @@ namespace Positron
 			// Set the Positron Interface content here so it is only receiving data for this application
 			VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
 
-			// Set the path to this executable so Voyager knows what application is playing
-			path = System.IO.Directory.GetParent(Application.dataPath).FullName;
+            #if !UNITY_EDITOR
+            // Set the path to this executable so Voyager knows what application is playing
+            path = System.IO.Directory.GetParent(Application.dataPath).FullName;
 			string[] executables = System.IO.Directory.GetFiles(path, "*.exe");
 
 			if( executables != null && executables.Length > 0 )
 			{
 				// Load the content if there is an executable
 				VoyagerDevice.LoadContent(executables[ 0 ]);
-				PlayPause();
+				VoyagerDevice.Idle();
 				VoyagerDevice.Loaded(true);
 			}
 			else
 			{
 				Debug.Log("No executable found at " + path);
 			}
+            #else
+            VoyagerDevice.LoadContent(path);
+			VoyagerDevice.Idle();
+            VoyagerDevice.Loaded(true);
+            #endif
 
-			screenFader = FindObjectOfType<ScreenFader>();
+            screenFader = FindObjectOfType<ScreenFader>();
 
 			// Start playing motion in Voyager - Positron Interface call to start motion //
 			// Interface.MotionProfile("Voyager Demo Start Motion Profile");
-			VoyagerDevice.Play();
+			// VoyagerDevice.Pause();
 
 			initializedInterface = true;
 

@@ -26,7 +26,7 @@ namespace Positron
 	}
 
 	// Device Play State Id.
-	public enum VoyagerDevicePlayState { Stop, Play, Pause }
+	public enum VoyagerDevicePlayState { Stop, Play, Pause, Idle }
 
 	public class VoyagerDevice : MonoBehaviour
 	{
@@ -376,6 +376,27 @@ namespace Positron
 			}
 		}
 
+		static public void Idle()
+		{
+			if( IsInitialized )
+			{
+				_isPaused = true;
+				deviceState.@event.playPause = false;
+
+				_playState = VoyagerDevicePlayState.Idle;
+
+				deviceState.@event.status = (int)_playState;
+
+				SendData();
+
+				Debug.Log("VoyagerDevice >> | command | 'Idle'");
+			}
+			else
+			{
+				Debug.LogError("DeviceInterface is NOT initialized; Call Init( VoyagerDeviceConfig ) first!");
+			}
+		}
+
 		// Play the motion profile, sets Interface.paused to false
 		static public void Play()
 		{
@@ -626,6 +647,14 @@ namespace Positron
 			{
 				if( UnityEngine.XR.XRDevice.isPresent )
 				{
+					#if UNITY_STANDALONE || UNITY_EDITOR
+					if (UnityEngine.XR.XRDevice.model.Contains("Vive")) { 
+						// Valve.VR.OpenVR.System.ResetSeatedZeroPose();
+					}
+					#endif
+
+					UnityEngine.XR.XRDevice.SetTrackingSpaceType(UnityEngine.XR.TrackingSpaceType.Stationary);
+
 					UnityEngine.XR.InputTracking.Recenter();
 				}
 
