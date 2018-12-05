@@ -57,6 +57,8 @@ namespace Positron
 			get{ return Instance._config; }
 		}
 
+		static public Transform cameraMain;
+
 		private IPEndPoint remoteEndPoint;
 		private UdpClient receiveClient;
 		private UdpClient sendClient;
@@ -510,9 +512,14 @@ namespace Positron
 			if( IsInitialized )
 			{
 				deviceState.@event.timePosition = time;
-				deviceState.@event.headsetPitch = Camera.main.transform.localEulerAngles.x * Mathf.Deg2Rad;
-				deviceState.@event.headsetYaw = Camera.main.transform.localEulerAngles.y * Mathf.Deg2Rad;
-				deviceState.@event.headsetRoll = Camera.main.transform.localEulerAngles.z * Mathf.Deg2Rad;
+
+				if (cameraMain == null || !cameraMain.gameObject.activeInHierarchy) {
+					cameraMain = Camera.main.transform;
+				}
+
+				deviceState.@event.headsetPitch = cameraMain.localEulerAngles.x * Mathf.Deg2Rad;
+				deviceState.@event.headsetYaw = cameraMain.localEulerAngles.y * Mathf.Deg2Rad;
+				deviceState.@event.headsetRoll = cameraMain.localEulerAngles.z * Mathf.Deg2Rad;
 
 				SendData();
 				// Debug.Log(json);

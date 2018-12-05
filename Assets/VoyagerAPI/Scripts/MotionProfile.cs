@@ -20,10 +20,9 @@ namespace Positron
 				_profileName = value;
 
 				if( !string.IsNullOrEmpty(_profileName)
-					&& Application.isPlaying
-					&& VoyagerDevice.MotionProfile != _profileName
-					&& VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
-				{
+				&& Application.isPlaying
+				&& VoyagerDevice.MotionProfile != _profileName
+				&& VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop ) {
 					VoyagerDevice.SetMotionProfile(_profileName);
 					// Interface.Play();
 				}
@@ -37,24 +36,20 @@ namespace Positron
 			}
 		}
 
-        void Start()
-        {
+        void Start() {
             if (!string.IsNullOrEmpty(_profileName)
-                    && Application.isPlaying
-                    && VoyagerDevice.MotionProfile != _profileName
-                    && VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop)
-            {
+			&& Application.isPlaying
+			&& VoyagerDevice.MotionProfile != _profileName
+			&& VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop) {
                 VoyagerDevice.SetMotionProfile(_profileName);
             }
         }
 
 
-            void Update()
-		{
-			if( !VoyagerDevice.IsUpdated && VoyagerDevice.IsInitialized )
-			{
+        /*void Update() {
+			if (!VoyagerDevice.IsUpdated && VoyagerDevice.IsInitialized) {
 				VoyagerDevice.SendData();
 			}
-		}
+		}*/
 	}
 }
