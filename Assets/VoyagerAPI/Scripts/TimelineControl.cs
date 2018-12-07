@@ -42,6 +42,9 @@ namespace Positron
 		public float seekTime = 5000f;
 		public float seekTimeFast = 7000f;
 
+		// Turn this ON to optimize memory allocations for VoyagerAPI calls.
+		public bool optimizeMem = false;
+
 		private int currentTrack = 0;
 
 		private float lastSwitchTime = 0f;
@@ -152,25 +155,25 @@ namespace Positron
 		public bool IsPlaying()
 		{
 			return (Time.timeScale == 1f && director != null && director.state == PlayState.Playing);
-        }
+		}
 
-        public void Play()
+		public void Play()
 		{
 			if( director != null )
 			{
-                // director.Resume();
-                if (director.state == PlayState.Playing)
-                {
-                    director.playableGraph.GetRootPlayable(0).SetSpeed(1);
-                }
-                else
-                {
-                    director.Play();
-                    director.playableGraph.GetRootPlayable(0).SetSpeed(1);
-                    Debug.Log("Playing director");
-                }
+				// director.Resume();
+				if( director.state == PlayState.Playing )
+				{
+					director.playableGraph.GetRootPlayable(0).SetSpeed(1);
+				}
+				else
+				{
+					director.Play();
+					director.playableGraph.GetRootPlayable(0).SetSpeed(1);
+					Debug.Log("Playing director");
+				}
 
-                VoyagerDevice.SendTime((int)GetTime());
+				VoyagerDevice.SendTime((int)GetTime());
 				// Interface.Play();
 
 				playButton2D.image.sprite = pauseSprite2D;
@@ -185,12 +188,12 @@ namespace Positron
 		{
 			if( director != null )
 			{
-				//director.Pause();
+				// director.Pause();
 				if( director.state == PlayState.Playing )
 				{
 					director.playableGraph.GetRootPlayable(0).SetSpeed(0);
-                    director.Pause();
-                }
+					director.Pause();
+				}
 
 				VoyagerDevice.SendTime((int)GetTime());
 				// Interface.Pause();
@@ -285,14 +288,18 @@ namespace Positron
 		public void SetTime()
 		{
 			float time = GetTime();
-			if( GetDuration() > 0f )
+			if( !optimizeMem )	// Optimize text display out, due to conversion mem alloc.
 			{
-				float d = time / GetDuration();
-				setVideoSeekSliderValue = d;
-				videoSeekSlider2D.value = d;
-				position2DText.text = ConvertTime((int)time);
+				if( GetDuration() > 0f )
+				{
+					float d = time / GetDuration();
+					setVideoSeekSliderValue = d;
+					videoSeekSlider2D.value = d;
+					{
+						position2DText.text = ConvertTime((int)time);
+					}
+				}
 			}
-
 			VoyagerDevice.SendTime((int)(time));
 		}
 
@@ -310,24 +317,23 @@ namespace Positron
 
 			Seek(videoSeekSlider2D.value * GetDuration());
 
-			if ( wasPlayingOnScrub )
+			if( wasPlayingOnScrub )
 			{
 				Pause();
 			}
-
 		}
 
 		public void OnVideoSliderUp()
 		{
-            Seek(videoSeekSlider2D.value * GetDuration());
+			Seek(videoSeekSlider2D.value * GetDuration());
 
-			if ( wasPlayingOnScrub )
+			if( wasPlayingOnScrub )
 			{
 				Play();
 
 				wasPlayingOnScrub = false;
 			}
-        }
+		}
 
 		// Toggle the menu
 		public void ToggleMenu()
@@ -389,8 +395,8 @@ namespace Positron
 						Play();
 					}
 
-					if( VoyagerDevice.IsPaused && IsPlaying() 
-                    || VoyagerDevice.IsPaused && Time.timeScale == 0f && director != null && director.state == PlayState.Playing)
+					if( VoyagerDevice.IsPaused && IsPlaying()
+						|| VoyagerDevice.IsPaused && Time.timeScale == 0f && director != null && director.state == PlayState.Playing )
 					{
 						Pause();
 					}
@@ -412,14 +418,13 @@ namespace Positron
 
 			if( director != null )
 			{
-
 				duration2DText.text = ConvertTime((int)GetDuration());
 
 				// Set Bottom UI to zero position
 				pos = Vector2.zero;
 
-                playButton2D.image.sprite = (director.state == PlayState.Playing ? pauseSprite2D : playSprite2D);
-            }
+				playButton2D.image.sprite = (director.state == PlayState.Playing ? pauseSprite2D : playSprite2D);
+			}
 			else
 			{
 				Debug.LogError("Need a PlayableDirector");

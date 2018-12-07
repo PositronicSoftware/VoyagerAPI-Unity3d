@@ -64,6 +64,8 @@ namespace Positron
 		private UdpClient sendClient;
 		private Thread receiveThread;
 		private int lastRecvPacketId = -1;
+		private string lastSentJsonPktStr;							// Packet string is cached to prevent GC cleanup on each SendData() call.
+		private byte[] lastSentJsonPktBytes = new byte[ 5 * 1024 ];	// Packet bytes fixed size & cached to prevent GC cleanup on each SendData() call.
 		private Queue<VoyagerDevicePacket> recvPacketsQueue = new Queue<VoyagerDevicePacket>();
 
 		private VoyagerDevicePacket lastRecvDevicePacket = new VoyagerDevicePacket();
@@ -76,7 +78,6 @@ namespace Positron
 
 		// Used to lock when editing data members while receiving or processing packet data
 		private System.Object criticalSection = new System.Object();
-
 
 		/********************************************************
 		 *  Device Interface
@@ -271,14 +272,11 @@ namespace Positron
 			{
 				if( !IsInitialized ) { throw new Exception("DeviceInterface is NOT initialized; Call Init( VoyagerDeviceConfig ) first!"); }
 
-				string jsonStr;
-
-				VoyagerDeviceUtils.DevicePacketToJson(deviceState, out jsonStr);
-
-				byte[] data = Encoding.UTF8.GetBytes(jsonStr);
-
-				Instance.sendClient.Send(data, data.Length, Instance.remoteEndPoint);
-				// print(jsonStr);
+				VoyagerDeviceUtils.DevicePacketToJson(deviceState, out Instance.lastSentJsonPktStr);
+				int numJSONChars = Instance.lastSentJsonPktStr.Length;
+				int numBytes = Encoding.UTF8.GetBytes(Instance.lastSentJsonPktStr, 0, numJSONChars, Instance.lastSentJsonPktBytes, 0);
+				Instance.sendClient.Send(Instance.lastSentJsonPktBytes, numBytes, Instance.remoteEndPoint);
+				// print(Instance.lastSentJsonPktStr);
 			}
 			catch( Exception err ) {
 				print(err.ToString());
@@ -513,7 +511,8 @@ namespace Positron
 			{
 				deviceState.@event.timePosition = time;
 
-				if (cameraMain == null || !cameraMain.gameObject.activeInHierarchy) {
+				if( cameraMain == null || !cameraMain.gameObject.activeInHierarchy )
+				{
 					cameraMain = Camera.main.transform;
 				}
 
@@ -655,7 +654,8 @@ namespace Positron
 				if( UnityEngine.XR.XRDevice.isPresent )
 				{
 					#if UNITY_STANDALONE || UNITY_EDITOR
-					if (UnityEngine.XR.XRDevice.model.Contains("Vive")) { 
+					if( UnityEngine.XR.XRDevice.model.Contains("Vive"))
+					{
 						// Valve.VR.OpenVR.System.ResetSeatedZeroPose();
 					}
 					#endif
@@ -818,7 +818,7 @@ namespace Positron
 									Recenter();
 								}
 
-								if( /*!string.IsNullOrEmpty(receivedPacket.@event.url) &&*/ IsContentLoaded )
+								if(	/*!string.IsNullOrEmpty(receivedPacket.@event.url) &&*/ IsContentLoaded )
 								{
 									if( receivedPacket.@event.playPause == IsPaused )
 									{
