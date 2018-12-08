@@ -1,9 +1,7 @@
 /* Copyright Positron 2018 - Code by Brad Nelson */
 
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.IO;
+using System.Text;
 using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.UI;
@@ -42,14 +40,12 @@ namespace Positron
 		public float seekTime = 5000f;
 		public float seekTimeFast = 7000f;
 
-		// Turn this ON to optimize memory allocations for VoyagerAPI calls.
-		public bool optimizeMem = false;
-
 		private int currentTrack = 0;
-
 		private float lastSwitchTime = 0f;
 		private float lastSwitchDelay = 1f;
-
+		private double directorCachedTime;
+		private double directorCachedDuration;
+		private StringBuilder timeStampSB = new StringBuilder("00:00:00", 8);
 		private MotionProfile motionProfile;
 
 		private bool _trackForward = false;
@@ -116,19 +112,19 @@ namespace Positron
 
 		public float GetTime()
 		{
-			return (float)director.time * 1000;
+			return (float)directorCachedTime * 1000f;
 		}
 
 		public float GetDuration()
 		{
-			return (float)director.duration * 1000;
+			return (float)directorCachedDuration * 1000f;
 		}
 
 		public void Seek(float time)
 		{
 			if( director != null )
 			{
-				director.time = ((double)(time / 1000));
+				director.time = ((double)(time / 1000f));
 				director.Evaluate();
 				VoyagerDevice.SendTime((int)(time));
 			}
@@ -278,26 +274,21 @@ namespace Positron
 		private string ConvertTime(int ms)
 		{
 			var timeSpan = TimeSpan.FromMilliseconds(ms);
-			// Converts the total miliseconds to the human readable time format
-			return string.Format("{0:D2}:{1:D2}:{2:D2}",
-				timeSpan.Hours,
-				timeSpan.Minutes,
-				timeSpan.Seconds);
+			timeStampSB.Remove(0, 8);
+			timeStampSB.AppendFormat("{0:D2}:{1:D2}:{2:D2}", timeSpan.Hours, timeSpan.Minutes, timeSpan.Seconds);
+			return timeStampSB.ToString();
 		}
 
 		public void SetTime()
 		{
 			float time = GetTime();
-			if( !optimizeMem )	// Optimize text display out, due to conversion mem alloc.
+			if( GetDuration() > 0f )
 			{
-				if( GetDuration() > 0f )
+				float d = time / GetDuration();
+				setVideoSeekSliderValue = d;
+				videoSeekSlider2D.value = d;
 				{
-					float d = time / GetDuration();
-					setVideoSeekSliderValue = d;
-					videoSeekSlider2D.value = d;
-					{
-						position2DText.text = ConvertTime((int)time);
-					}
+					position2DText.text = ConvertTime((int)time);
 				}
 			}
 			VoyagerDevice.SendTime((int)(time));
@@ -418,6 +409,10 @@ namespace Positron
 
 			if( director != null )
 			{
+				// These PlayableDirector getters() cause mem allocations and are therefore called once & cached here.
+				directorCachedTime = director.time;
+				directorCachedDuration = director.duration;
+
 				duration2DText.text = ConvertTime((int)GetDuration());
 
 				// Set Bottom UI to zero position
