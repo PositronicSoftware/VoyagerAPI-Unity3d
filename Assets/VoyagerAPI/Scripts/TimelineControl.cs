@@ -32,7 +32,7 @@ namespace Positron
 		public Sprite muteOnSprite;
 
 		public Slider videoSeekSlider2D;
-		private float setVideoSeekSliderValue;
+		private float setVideoSeekSliderValue = 0;
 		private bool wasPlayingOnScrub;
 		public Text position2DText;
 		public Text duration2DText;
@@ -40,11 +40,19 @@ namespace Positron
 		public float seekTime = 5000f;
 		public float seekTimeFast = 7000f;
 
+		[ Header("Optimization") ]
+
+		[ Tooltip("Enable optimizations to reduce memory allocation per frame.") ]
+		public bool optimizeMemAlloc;
+
+		[ Range(1, 30), Tooltip("Stagger SendTime() updates to Voyager to reduce JSON parse mem-alloc.\n'N' == SendTime() every Nth frame.\nRequires 'OptimizeMemAlloc' ON to work.") ]
+		public int voyagerSendTimeInterval = 1;
+
 		private int currentTrack = 0;
 		private float lastSwitchTime = 0f;
 		private float lastSwitchDelay = 1f;
-		private double directorCachedTime;
-		private double directorCachedDuration;
+		private double directorCachedTime = 0;
+		private double directorCachedDuration = 1;
 		private StringBuilder timeStampSB = new StringBuilder("00:00:00", 8);
 		private MotionProfile motionProfile;
 
@@ -281,17 +289,7 @@ namespace Positron
 
 		public void SetTime()
 		{
-			float time = GetTime();
-			if( GetDuration() > 0f )
-			{
-				float d = time / GetDuration();
-				setVideoSeekSliderValue = d;
-				videoSeekSlider2D.value = d;
-				{
-					position2DText.text = ConvertTime((int)time);
-				}
-			}
-			VoyagerDevice.SendTime((int)(time));
+			VoyagerDevice.SendTime((int)GetTime());
 		}
 
 		public void OnVideoSeekSlider2D()
@@ -366,67 +364,90 @@ namespace Positron
 				return;
 			}
 
-			if( VoyagerDevice.IsUpdated && VoyagerDevice.IsInitialized )
-			{
-				if( VoyagerDevice.DeviceMotionProfileTime != VoyagerDevice.PrevDeviceMotionProfileTime
-					&& director != null && director.time != ((double)(VoyagerDevice.DeviceMotionProfileTime / 1000)))
-				{
-					Seek((float)VoyagerDevice.DeviceMotionProfileTime);
-				}
-
-				if( VoyagerDevice.IsRecentering )
-				{
-					voyagerManager.Recenter();
-				}
-
-				if( VoyagerDevice.IsContentLoaded )
-				{
-					if( !VoyagerDevice.IsPaused && !IsPlaying())
-					{
-						Play();
-					}
-
-					if( VoyagerDevice.IsPaused && IsPlaying()
-						|| VoyagerDevice.IsPaused && Time.timeScale == 0f && director != null && director.state == PlayState.Playing )
-					{
-						Pause();
-					}
-
-					if( VoyagerDevice.IsFastForwarding )
-					{
-						Seek();
-					}
-					else if( VoyagerDevice.IsRewinding )
-					{
-						Rewind();
-					}
-
-					ToggleMute(VoyagerDevice.IsMuted);
-				}
-			}
-
-			SetTime();
-
-			if( director != null )
-			{
-				// These PlayableDirector getters() cause mem allocations and are therefore called once & cached here.
-				directorCachedTime = director.time;
-				directorCachedDuration = director.duration;
-
-				duration2DText.text = ConvertTime((int)GetDuration());
-
-				// Set Bottom UI to zero position
-				pos = Vector2.zero;
-
-				playButton2D.image.sprite = (director.state == PlayState.Playing ? pauseSprite2D : playSprite2D);
-			}
-			else
+			if( director == null )
 			{
 				Debug.LogError("Need a PlayableDirector");
+				return;
 			}
+
+			// These PlayableDirector getters() cause mem allocations and are therefore called once & cached here.
+			directorCachedTime = director.time;
+			directorCachedDuration = director.duration;
+
+			int tickNum = Time.frameCount;
+			if( VoyagerDevice.IsInitialized )
+			{
+				if( VoyagerDevice.IsUpdated )
+				{
+					if( VoyagerDevice.DeviceMotionProfileTime != VoyagerDevice.PrevDeviceMotionProfileTime
+						&& director != null && director.time != ((double)(VoyagerDevice.DeviceMotionProfileTime / 1000)))
+					{
+						Seek((float)VoyagerDevice.DeviceMotionProfileTime);
+					}
+
+					if( VoyagerDevice.IsRecentering )
+					{
+						voyagerManager.Recenter();
+					}
+
+					if( VoyagerDevice.IsContentLoaded )
+					{
+						if( !VoyagerDevice.IsPaused && !IsPlaying())
+						{
+							Play();
+						}
+
+						if( VoyagerDevice.IsPaused && IsPlaying()
+							|| VoyagerDevice.IsPaused && Time.timeScale == 0f && director != null && director.state == PlayState.Playing )
+						{
+							Pause();
+						}
+
+						if( VoyagerDevice.IsFastForwarding )
+						{
+							Seek();
+						}
+						else if( VoyagerDevice.IsRewinding )
+						{
+							Rewind();
+						}
+
+						ToggleMute(VoyagerDevice.IsMuted);
+					}
+				}
+
+				if( !optimizeMemAlloc || (tickNum % voyagerSendTimeInterval) == 0 )
+				{
+					SetTime();
+				}
+			}
+
+			float durationMS = GetDuration();
+			int textTickCycle = tickNum % 30;
+			if( !optimizeMemAlloc || textTickCycle == 0 )
+			{
+				duration2DText.text = ConvertTime((int)durationMS);
+			}
+
+			if( durationMS > 0f )
+			{
+				float timeMS = GetTime();
+				float d = timeMS / durationMS;
+				setVideoSeekSliderValue = d;
+				videoSeekSlider2D.value = d;
+
+				if( !optimizeMemAlloc || textTickCycle == 7 || textTickCycle == 22 )
+				{
+					position2DText.text = ConvertTime((int)timeMS);
+				}
+			}
+
+			playButton2D.image.sprite = (director.state == PlayState.Playing ? pauseSprite2D : playSprite2D);
 
 			CheckFullscreen();
 
+			// Set Bottom UI to zero position
+			pos = Vector2.zero;
 			bottomUI2D.anchoredPosition = Vector3.Lerp(bottomUI2D.anchoredPosition, pos, 0.16f);
 		}
 	}
