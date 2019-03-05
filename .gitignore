@@ -21,11 +21,13 @@ profile
 
 ## Unity3d
 *.csproj
+*.csproj.user
 *.pidb
 *.unityproj
 Builds/*
 Exports/*
 Library/*
+Logs/*
 Obj/*
 Screenshots/*
 Temp/*
