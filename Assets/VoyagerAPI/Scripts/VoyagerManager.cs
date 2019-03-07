@@ -10,7 +10,17 @@ namespace Positron
 	 * and execute the commands from the Voyager Interface*/
 	public class VoyagerManager : MonoBehaviour
 	{
-		public TimelineControl timelineControl;
+		[ Header("Timeline") ]
+
+		public TimelineControl timelineControl = null;
+
+		[ Header("Optimization") ]
+
+		[ Tooltip("Enable optimizations to reduce memory allocation per frame.") ]
+		public bool optimizeSendTime;
+
+		[ Range(1, 30), Tooltip("Stagger SendTime() updates to Voyager to reduce JSON parse mem-alloc.\n'N' == SendTime() every Nth frame.\nRequires 'OptimizeMemAlloc' ON to work.") ]
+		public int voyagerSendTimeInterval = 1;
 
 		// Path for this application's executable
 		[ SerializeField ]
@@ -24,6 +34,9 @@ namespace Positron
 
 		// Screen fading script
 		private ScreenFader screenFader;
+
+		private float lastTrackSwitchTime = 0f;
+		private float lastTrackSwitchDelay = 1f;
 
 		// Fade in the screen
 		public void ScreenFadeIn()
@@ -99,11 +112,21 @@ namespace Positron
 		public void SeekForward10()
 		{
 			experienceTime += 10;
+
+			if( timelineControl )
+			{
+				experienceTime = timelineControl.SeekToSeconds( experienceTime );
+			}
 		}
 
 		public void SeekBack10()
 		{
 			experienceTime = Mathf.Max( 0f, experienceTime - 10f );
+
+			if( timelineControl )
+			{
+				experienceTime = timelineControl.SeekToSeconds( experienceTime );
+			}
 		}
 
 		public void SeekForward30()
@@ -112,6 +135,7 @@ namespace Positron
 
 			if( timelineControl )
 			{
+				experienceTime = timelineControl.SeekToSeconds( experienceTime );
 			}
 		}
 
@@ -121,6 +145,33 @@ namespace Positron
 
 			if( timelineControl )
 			{
+				experienceTime = timelineControl.SeekToSeconds( experienceTime );
+			}
+		}
+
+		public void NextTrack()
+		{
+			if( timelineControl )
+			{
+				lastTrackSwitchTime = Time.realtimeSinceStartup;
+				timelineControl.NextTrack();
+			}
+			else
+			{
+				Debug.LogError("No TimelineControl component set.");
+			}
+		}
+
+		public void PreviousTrack()
+		{
+			if( timelineControl )
+			{
+				lastTrackSwitchTime = Time.realtimeSinceStartup;
+				timelineControl.PreviousTrack();
+			}
+			else
+			{
+				Debug.LogError("No TimelineControl component set.");
 			}
 		}
 
@@ -128,7 +179,10 @@ namespace Positron
 		{
 			DontDestroyOnLoad( this );
 
-			timelineControl = GetComponent<TimelineControl>();
+			if( timelineControl == null )
+			{
+				timelineControl = GetComponent<TimelineControl>();
+			}
 
 			// Init HMD
 			if( UnityEngine.XR.XRDevice.isPresent && UnityEngine.XR.XRSettings.enabled )
@@ -288,14 +342,35 @@ namespace Positron
 				return;
 			}
 
+			// ~===============================================
+			// Oculus Commands
+
 			// Recenter for Oculus Remote DPad
 			if( Input.GetAxis("Vertical") >= 1.0f )
 			{
 				Recenter();
 			}
 
+			// Switch tracks with the Oculus Remote DPad
+			if( Time.realtimeSinceStartup - lastTrackSwitchTime > lastTrackSwitchDelay )
+			{
+				if( Input.GetAxis("Horizontal") >= 1.0f )
+				{
+					NextTrack();
+				}
+				else if( Input.GetAxis("Horizontal") <= -1.0f )
+				{
+					PreviousTrack();
+				}
+			}
+
 			// ~===============================================
 			// Key Commands
+
+			if( timelineControl != null && Input.GetKeyDown(KeyCode.H))
+			{
+				timelineControl.ToggleMenu();
+			}
 
 			if( Input.GetKeyDown( KeyCode.Space ))		// Play-Pause
 			{
@@ -309,42 +384,56 @@ namespace Positron
 
 			if( Input.GetKeyDown( KeyCode.RightArrow ))	// Skip ahead 10sec
 			{
-				experienceTime += 10f;
+				SeekForward10();
 			}
 
 			if( Input.GetKeyDown( KeyCode.LeftArrow ))	// Skip back 10sec
 			{
-				experienceTime = Mathf.Max( 0f, experienceTime - 10f );
+				SeekBack10();
 			}
 
 			if( Input.GetKeyDown( KeyCode.UpArrow ))	// Skip ahead 30sec
 			{
-				experienceTime += 30f;
+				SeekForward30();
 			}
 
 			if( Input.GetKeyDown( KeyCode.DownArrow ))	// Skip back 30sec
 			{
-				experienceTime = Mathf.Max( 0f, experienceTime - 30f );
+				SeekBack30();
 			}
 
 			// ~===============================================
 			// Send Experience Time to PSM.
 
-			// If not using Motion Profiles with Timeline, we must send Time to PSM.
-			if( timelineControl == null )
+			int tickNum = Time.frameCount;
+			if( !optimizeSendTime || (tickNum % voyagerSendTimeInterval) == 0 )
 			{
 				switch( VoyagerDevice.PlayState )
 				{
 					case VoyagerDevicePlayState.Play:
 					{
-						experienceTime += Time.deltaTime;
-						VoyagerDevice.SendTimeSeconds(experienceTime);
+						if( timelineControl == null )
+						{
+							experienceTime += Time.deltaTime;
+							VoyagerDevice.SendTimeSeconds(experienceTime);
+						}
+						else
+						{
+							experienceTime = timelineControl.SendTimeSeconds();
+						}
 						break;
 					}
 
 					case VoyagerDevicePlayState.Pause:
 					{
-						VoyagerDevice.SendTimeSeconds(experienceTime);
+						if( timelineControl == null )
+						{
+							VoyagerDevice.SendTimeSeconds(experienceTime);
+						}
+						else
+						{
+							experienceTime = timelineControl.SendTimeSeconds();
+						}
 						break;
 					}
 
@@ -359,14 +448,23 @@ namespace Positron
 					}
 				}
 			}
-			else
+
+			// ~===============================================
+			// Handle Fast-Forward and Rewind
+
+			if( VoyagerDevice.IsContentLoaded )
 			{
-				experienceTime = timelineControl.GetTime();
-				VoyagerDevice.SendTimeSeconds(experienceTime);
+				if( VoyagerDevice.IsFastForwarding )
+				{
+					SeekForward10();
+				}
+				else if( VoyagerDevice.IsRewinding )
+				{
+					SeekBack10();
+				}
 			}
 		}
 
-		// Exit the application
 		public void ExitApp()
 		{
 			VoyagerDevice.Stop();
@@ -376,10 +474,10 @@ namespace Positron
 			StartCoroutine(DoQuitApp());
 		}
 
-		// Screen fade out if it is available and quit the application
 		IEnumerator DoQuitApp()
 		{
 			Time.timeScale = 1f;
+
 			if( screenFader != null )
 			{
 				yield return new WaitForSeconds(screenFader.fadeTime);

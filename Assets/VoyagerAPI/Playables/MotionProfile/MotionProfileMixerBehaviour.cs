@@ -53,14 +53,6 @@ public class MotionProfileMixerBehaviour : PlayableBehaviour
         {
             m_TrackBinding.ProfileName = m_ProfileName;
         }
-
-		if (Application.isPlaying)
-		{
-			if (!VoyagerDevice.IsUpdated && VoyagerDevice.IsInitialized && !TimelineControl.OverrideTime)
-			{
-				VoyagerDevice.SetTimeSeconds((float)playable.GetTime());
-			}
-		}
     }
 
     public override void OnGraphStop( Playable playable )

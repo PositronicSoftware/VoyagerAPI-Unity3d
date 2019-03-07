@@ -117,8 +117,8 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 114393883362881614}
-        m_MethodName: TrackBack
+      - m_Target: {fileID: 114608113667634752}
+        m_MethodName: PreviousTrack
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -1079,8 +1079,8 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 114393883362881614}
-        m_MethodName: TrackForward
+      - m_Target: {fileID: 114608113667634752}
+        m_MethodName: NextTrack
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -1678,8 +1678,8 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 114393883362881614}
-        m_MethodName: Seek
+      - m_Target: {fileID: 114608113667634752}
+        m_MethodName: SeekForward10
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -2435,6 +2435,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   timelineControl: {fileID: 0}
+  optimizeSendTime: 0
+  voyagerSendTimeInterval: 1
   path: C:\Positron\Media\Voyager Demo.exe
 --- !u!114 &114393883362881614
 MonoBehaviour:
@@ -2462,8 +2464,6 @@ MonoBehaviour:
   videoSeekSlider2D: {fileID: 114540208336250212}
   position2DText: {fileID: 114892758931343402}
   duration2DText: {fileID: 114839852472506522}
-  seekTime: 5000
-  seekTimeFast: 7000
   TrackSetups:
   - motionProfile: A
     track: {fileID: 0}
@@ -2472,7 +2472,6 @@ MonoBehaviour:
   - motionProfile: C
     track: {fileID: 0}
   optimizeMemAlloc: 0
-  voyagerSendTimeInterval: 1
 --- !u!1 &1924778110776790
 GameObject:
   m_ObjectHideFlags: 0
@@ -2719,8 +2718,8 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 114393883362881614}
-        m_MethodName: Rewind
+      - m_Target: {fileID: 114608113667634752}
+        m_MethodName: SeekBack10
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

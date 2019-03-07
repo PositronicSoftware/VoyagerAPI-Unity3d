@@ -53,21 +53,14 @@ namespace Positron
 
 		[ Header("Playable Tracks") ]
 
-		public float seekTime = 5000f;
-		public float seekTimeFast = 7000f;
 		private PlayableDirector director;
 		public VoyagerTrackSetup[] TrackSetups;
 		private int currentTrackIndex = 0;
-		private float lastTrackSwitchTime = 0f;
-		private float lastTrackSwitchDelay = 1f;
 
 		[ Header("Optimization") ]
 
 		[ Tooltip("Enable optimizations to reduce memory allocation per frame.") ]
 		public bool optimizeMemAlloc;
-
-		[ Range(1, 30), Tooltip("Stagger SendTime() updates to Voyager to reduce JSON parse mem-alloc.\n'N' == SendTime() every Nth frame.\nRequires 'OptimizeMemAlloc' ON to work.") ]
-		public int voyagerSendTimeInterval = 1;
 
 		private double directorCachedTimeSec = 0;
 		private double directorCachedDurationSec = 1;
@@ -93,55 +86,46 @@ namespace Positron
 			get{ return director; }
 		}
 
-		public void TrackForward()
+		public void NextTrack()
 		{
 			SwitchPlayableTrack( currentTrackIndex + 1 );
 		}
 
-		public void TrackBack()
+		public void PreviousTrack()
 		{
 			SwitchPlayableTrack( currentTrackIndex - 1 );
 		}
 
-		// overrideTime = bool, override the Interface send time or not
-		static private bool _overrideTime = false;
-		static public bool OverrideTime
-		{
-			get{ return _overrideTime; }
-		}
-
-		public float GetTime()
+		public float GetTimeMS()
 		{
 			return (float)directorCachedTimeSec * 1000f;
 		}
 
-		public float GetDuration()
+		public float GetDurationMS()
 		{
 			return (float)directorCachedDurationSec * 1000f;
 		}
 
-		public void Seek( float timeMS )
+		public float SeekToSeconds( float timeSeconds )
 		{
 			if( director != null )
 			{
-				director.time = ((double)(Mathf.Max( 0f, timeMS ) / 1000f));
+				timeSeconds = Mathf.Clamp( timeSeconds, 0f, (float)directorCachedDurationSec );
+				director.time = ((double)timeSeconds);
 				director.Evaluate();
-				VoyagerDevice.SendTime((int)(timeMS));
+				VoyagerDevice.SendTimeSeconds(timeSeconds);
+				return timeSeconds;
 			}
 			else
 			{
 				Debug.LogError("Need TrackSetups with a Playable Director");
+				return 0f;
 			}
 		}
 
-		public void Seek()
+		public void SeekToMS( float timeMS )
 		{
-			Seek( GetTime() + seekTime );
-		}
-
-		public void Rewind()
-		{
-			Seek( GetTime() - seekTime );
+			SeekToSeconds( timeMS / 1000f );
 		}
 
 		void Play()
@@ -157,9 +141,7 @@ namespace Positron
 				{
 					playGraph.GetRootPlayable(0).SetSpeed(1);
 				}
-				// Debug.Log("Play Director");
-
-				SetTime();
+				SendTimeSeconds();
 
 				playButton2D.image.sprite = pauseSprite2D;
 			}
@@ -182,9 +164,7 @@ namespace Positron
 				{
 					director.Pause();
 				}
-				// Debug.Log("Pause Director");
-
-				SetTime();
+				SendTimeSeconds();
 
 				playButton2D.image.sprite = playSprite2D;
 			}
@@ -213,13 +193,11 @@ namespace Positron
 				var trackDef = TrackSetups[ currentTrackIndex ];
 				if( trackDef.IsValid())
 				{
-					lastTrackSwitchTime = Time.time;
-
 					director.Stop();
 					director = trackDef.track;
 
 					VoyagerDevice.SetMotionProfile( trackDef.motionProfile );
-					Seek( 0 );
+					SeekToSeconds( 0 );
 
 					switch( VoyagerDevice.PlayState )
 					{
@@ -251,7 +229,7 @@ namespace Positron
 		{
 			if( videoSeekSlider2D.value != setVideoSeekSliderValue )
 			{
-				Seek(videoSeekSlider2D.value * GetDuration());
+				SeekToMS(videoSeekSlider2D.value * GetDurationMS());
 			}
 		}
 
@@ -259,7 +237,7 @@ namespace Positron
 		{
 			wasPlayingOnScrub = (director.state == PlayState.Playing);
 
-			Seek(videoSeekSlider2D.value * GetDuration());
+			SeekToMS(videoSeekSlider2D.value * GetDurationMS());
 
 			if( wasPlayingOnScrub )
 			{
@@ -269,7 +247,7 @@ namespace Positron
 
 		public void OnVideoSliderUp()
 		{
-			Seek(videoSeekSlider2D.value * GetDuration());
+			SeekToMS(videoSeekSlider2D.value * GetDurationMS());
 
 			if( wasPlayingOnScrub )
 			{
@@ -298,7 +276,14 @@ namespace Positron
 			}
 		}
 
-		string ConvertTime(int timeMS)
+		public float SendTimeSeconds()
+		{
+			float timeMS = GetTimeMS();
+			VoyagerDevice.SendTime((int)timeMS);
+			return timeMS / 1000f;
+		}
+
+		string ConvertMillisecondsToString(int timeMS)
 		{
 			var timeSpan = TimeSpan.FromMilliseconds(timeMS);
 			timeStampSB.Remove(0, 8);
@@ -306,16 +291,10 @@ namespace Positron
 			return timeStampSB.ToString();
 		}
 
-		void SetTime()
-		{
-			VoyagerDevice.SendTime((int)GetTime());
-		}
-
 		void Start()
 		{
 			startBottomUI2DPos = bottomUI2D.anchoredPosition;
 			pos = startBottomUI2DPos;
-			_overrideTime = true;
 
 			currentTrackIndex = 0;
 			if( TrackSetups.Length > 0 && TrackSetups[ currentTrackIndex ].IsValid())
@@ -412,26 +391,6 @@ namespace Positron
 				return;
 			}
 
-			if( Input.GetKeyDown(KeyCode.H))
-			{
-				ToggleMenu();
-			}
-
-			// Switch tracks with the Oculus Remote DPad left and right
-			if( Time.time - lastTrackSwitchTime > lastTrackSwitchDelay )
-			{
-				if( Input.GetAxis("Horizontal") >= 1.0f )
-				{
-					lastTrackSwitchTime = Time.time;
-					TrackForward();
-				}
-				else if( Input.GetAxis("Horizontal") <= -1.0f )
-				{
-					lastTrackSwitchTime = Time.time;
-					TrackBack();
-				}
-			}
-
 			// These PlayableDirector getters() cause mem allocations and are therefore called once & cached here.
 			directorCachedTimeSec = director.time;
 			directorCachedDurationSec = director.duration;
@@ -440,44 +399,27 @@ namespace Positron
 			if( VoyagerDevice.DeviceMotionProfileTime != VoyagerDevice.PrevDeviceMotionProfileTime
 				&& !Mathf.Approximately((float)directorCachedTimeSec, VoyagerDevice.DeviceMotionProfileTime / 1000f ))
 			{
-				Seek((float)VoyagerDevice.DeviceMotionProfileTime);
-			}
-
-			if( VoyagerDevice.IsContentLoaded )
-			{
-				if( VoyagerDevice.IsFastForwarding )
-				{
-					Seek();
-				}
-				else if( VoyagerDevice.IsRewinding )
-				{
-					Rewind();
-				}
+				SeekToMS((float)VoyagerDevice.DeviceMotionProfileTime);
 			}
 
 			int tickNum = Time.frameCount;
-			if( !optimizeMemAlloc || (tickNum % voyagerSendTimeInterval) == 0 )
-			{
-				SetTime();
-			}
-
-			float durationMS = GetDuration();
+			float durationMS = GetDurationMS();
 			int textTickCycle = tickNum % 30;
 			if( !optimizeMemAlloc || textTickCycle == 0 )
 			{
-				duration2DText.text = ConvertTime((int)durationMS);
+				duration2DText.text = ConvertMillisecondsToString((int)durationMS);
 			}
 
 			if( durationMS > 0f )
 			{
-				float timeMS = GetTime();
+				float timeMS = GetTimeMS();
 				float d = timeMS / durationMS;
 				setVideoSeekSliderValue = d;
 				videoSeekSlider2D.value = d;
 
 				if( !optimizeMemAlloc || textTickCycle == 7 || textTickCycle == 22 )
 				{
-					position2DText.text = ConvertTime((int)timeMS);
+					position2DText.text = ConvertMillisecondsToString((int)timeMS);
 				}
 			}
 
