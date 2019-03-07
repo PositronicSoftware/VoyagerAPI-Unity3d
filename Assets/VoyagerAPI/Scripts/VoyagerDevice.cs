@@ -28,6 +28,12 @@ namespace Positron
 	// Device Play State Id.
 	public enum VoyagerDevicePlayState { Stop, Play, Pause, Idle }
 
+	public delegate void VoyagerEventDelegate();
+
+	public delegate void VoyagerPlayStateEventDelegate( VoyagerDevicePlayState InState );
+
+	public delegate void VoyagerToggleEventDelegate( bool InValue );
+
 	public class VoyagerDevice : MonoBehaviour
 	{
 		// instance = an instance of the Positron.Interface
@@ -89,6 +95,13 @@ namespace Positron
 
 		// playerType = PlayerType, sets the Interface player type - #todo currently unused
 		static public PlayerType playerType = PlayerType.AVPro;
+
+		static public event VoyagerPlayStateEventDelegate OnPlayStateChange;
+		static public event VoyagerEventDelegate OnPlay;
+		static public event VoyagerEventDelegate OnPaused;
+		static public event VoyagerEventDelegate OnStopped;
+		static public event VoyagerEventDelegate OnRecenter;
+		static public event VoyagerToggleEventDelegate OnMuteToggle;
 
 		// The current state used by the Interface.  State.Stop, State.Play, State.Pause
 		static public VoyagerDevicePlayState _playState = VoyagerDevicePlayState.Stop;
@@ -381,12 +394,13 @@ namespace Positron
 			if( IsInitialized )
 			{
 				_isPaused = true;
-				deviceState.@event.playPause = false;
 
+				var prevState = _playState;
 				_playState = VoyagerDevicePlayState.Idle;
+				NotifyStateChange( prevState );
 
 				deviceState.@event.status = (int)_playState;
-
+				deviceState.@event.playPause = false;
 				SendData();
 
 				Debug.Log("VoyagerDevice >> | command | 'Idle'");
@@ -403,12 +417,13 @@ namespace Positron
 			if( IsInitialized )
 			{
 				_isPaused = false;
-				deviceState.@event.playPause = true;
 
+				var prevState = _playState;
 				_playState = VoyagerDevicePlayState.Play;
+				NotifyStateChange( prevState );
 
 				deviceState.@event.status = (int)_playState;
-
+				deviceState.@event.playPause = true;
 				SendData();
 
 				Debug.Log("VoyagerDevice >> | command | 'Play'");
@@ -425,12 +440,13 @@ namespace Positron
 			if( IsInitialized )
 			{
 				_isPaused = true;
+
+				var prevState = _playState;
 				_playState = VoyagerDevicePlayState.Pause;
+				NotifyStateChange( prevState );
 
-				deviceState.@event.playPause = false;
 				deviceState.@event.status = (int)_playState;
-
-
+				deviceState.@event.playPause = false;
 				SendData();
 
 				Debug.Log("VoyagerDevice >> | command | 'Pause'");
@@ -448,12 +464,15 @@ namespace Positron
 			{
 				_isPaused = true;
 
+				var prevState = _playState;
 				_playState = VoyagerDevicePlayState.Stop;
+				NotifyStateChange( prevState );
 
-				deviceState.@event.playPause = false;
 				deviceState.@event.status = (int)_playState;
+				deviceState.@event.playPause = false;
 				deviceState.@event.stop = true;
 				deviceState.@event.loaded = false;
+
 				LoadContent(null);
 				SetMotionProfile(null);
 
@@ -646,27 +665,28 @@ namespace Positron
 			}
 		}
 
-		// Recenters the HMD, and sends a packet to Voyager telling it has done so
+		// Recenter the HMD, and sends a packet to Voyager telling it has done so
 		static public void Recenter()
 		{
 			if( IsInitialized )
 			{
-				if( UnityEngine.XR.XRDevice.isPresent )
+				bool prevState = _isRecentering;
+				_isRecentering = true;
+				if( prevState != true )
 				{
-					#if UNITY_STANDALONE || UNITY_EDITOR
-					if( UnityEngine.XR.XRDevice.model.Contains("Vive"))
+					if( UnityEngine.XR.XRDevice.isPresent )
 					{
-						// Valve.VR.OpenVR.System.ResetSeatedZeroPose();
+						UnityEngine.XR.XRDevice.SetTrackingSpaceType(UnityEngine.XR.TrackingSpaceType.Stationary);
+
+						UnityEngine.XR.InputTracking.Recenter();
 					}
-					#endif
-
-					UnityEngine.XR.XRDevice.SetTrackingSpaceType(UnityEngine.XR.TrackingSpaceType.Stationary);
-
-					UnityEngine.XR.InputTracking.Recenter();
+					if( OnRecenter != null )
+					{
+						OnRecenter();
+					}
 				}
 
 				deviceState.@event.recenter = true;
-
 				SendData();
 
 				Debug.Log("VoyagerDevice >> | command | 'Recenter'");
@@ -769,8 +789,53 @@ namespace Positron
 		static public void ToggleMute()
 		{
 			_isMute = !_isMute;
+
+			if( OnMuteToggle != null )
+			{
+				OnMuteToggle( _isMute );
+			}
+
 			deviceState.@event.mute = _isMute;
 			Debug.Log("VoyagerDevice >> | command | 'Toggle Mute' " + _isMute);
+		}
+
+		static private void NotifyStateChange( VoyagerDevicePlayState InPrevState )
+		{
+			if( InPrevState != PlayState )
+			{
+				if( OnPlayStateChange != null )
+				{
+					OnPlayStateChange( PlayState );
+				}
+
+				switch( PlayState )
+				{
+					case VoyagerDevicePlayState.Play:
+					{
+						if( OnPlay != null )
+						{
+							OnPlay();
+						}
+						break;
+					}
+					case VoyagerDevicePlayState.Pause:
+					{
+						if( OnPaused != null )
+						{
+							OnPaused();
+						}
+						break;
+					}
+					case VoyagerDevicePlayState.Stop:
+					{
+						if( OnStopped != null )
+						{
+							OnStopped();
+						}
+						break;
+					}
+				}
+			}
 		}
 
 		void OnEnable()
@@ -802,23 +867,31 @@ namespace Positron
 							// Update params
 							_deviceMotionProfileTime = receivedPacket.@event.timePosition;
 							_isInLibrary = receivedPacket.@event.library;
-							_isRecentering = receivedPacket.@event.recenter;
 							_stereoscopyMode = receivedPacket.@event.stereoscopy;
 							_contentUrl = receivedPacket.@event.url;
 							_motionProfile = receivedPacket.@event.motionProfile;
 
+							// Handle Recenter
+							if( receivedPacket.@event.recenter )
+							{
+								Recenter();
+							}
+							else
+							{
+								_isRecentering = false;
+							}
+
+							// Handle state events
 							if( receivedPacket.@event.stop )
 							{
 								Stop();
 							}
 							else
 							{
-								if( receivedPacket.@event.recenter )
-								{
-									Recenter();
-								}
-
-								if(	/*!string.IsNullOrEmpty(receivedPacket.@event.url) &&*/ IsContentLoaded )
+								// In previous versions we used to ignore Play & Pause Commands if the Content URL was empty.
+								// Now we no longer check this URL, which will make testing a lot easier.
+								// if(	!string.IsNullOrEmpty(receivedPacket.@event.url) && IsContentLoaded )
+								if( IsContentLoaded )
 								{
 									if( receivedPacket.@event.playPause == IsPaused )
 									{
