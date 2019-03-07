@@ -1,10 +1,8 @@
 # Voyager API Unity3d Tester & Source
 
-For API usage and info on how to initialize the Voyager chair through API calls refer to the [Voyager API Docs](https://docs.google.com/document/d/1lZc5NaYeIUBKR2u4wBalcRn69S3lgsBh_itUxj5fI5w/).
-
 ---------------------------------------------------------------------------
 
-## Key Classes & Structs
+## Key Classes
 
 _Class_ **VoyagerDevice**
 
@@ -20,32 +18,152 @@ Implements loading a _VoyagerDeviceConfig_ object from a JSON config-file. For d
 
 ---------------------------------------------------------------------------
 
-## Using the API
+## Using the API - Components
 
-### 01 Initialize the VoyagerDevice
+### 01 | Setup VoyagerManager and TimelineControl Components
 
-VoyagerDevice must be initialized with the desired network-connection settings. Create a `VoyagerDeviceConfig` object, and call `VoyagerDevice::Init()`.
+Create a GameObject in your scene and call it **VoyagerManager**.
 
-```c#
-VoyagerDeviceConfig config = new VoyagerDeviceConfig(...); // Create configuration settings for the API.
+Now add the `VoyagerManager` and `TimelineControl` Components to this GameObject.
 
-VoyagerDevice.Init( config ); // Initialize the interface w/ the config.
-```
+### 02 | VoyagerManager Properties
 
-**Caveats**
+![VoyagerManager Properties](Docs/VoyagerManagerProperties.png)
 
-* Calling `VoyagerDevice::Init()` results in listener & receiver socket-thread creation. 
-* `Init()` will fail ( and possibly crash the application ) if the provided config port numbers collide with OS reserved port, or other applications.
+1. `path` should be set to your build executable path `"C:/ExecutableName.exe"` in the inspector.
+2. `timelineControl` can be left null. It will be auto-set on Play if a TimelineControl component is detected.
+3. You can optimize the VoyagerManager SendTime() frequency on memory-constrained platforms by setting `optimizeSendTime = true` in the inspector.
+4. VoyagerManager will load your PSM connection settings from a JSON Config file: See [Device Settings Config](#device-settings-config).
 
-### 02 Access to VoyagerDevice API
+VoyagerManager implements the following Keyboard commands for us to easily create Motion data and test your experience.
 
-VoyagerDevice is setup as a singleton with access to Instance fields and functions through properties and static methods.
-
-**Caveats**: Calling API methods on _VoyagerDevice_ before it’s initialized will cause errors! You can check `VoyagerDevice::IsInitialized` prior to starting calls.
+Key 				| Command 						
+ :------			|  :------						
+`Spacebar`			| Toggle Play-Pause			
+`Left-Right Arrows`	| Skip Forward-Backward 10 Seconds
+`Up-Down Arrows`	| Skip Forward-Backward 30 Seconds
+`R`					| Recenter HMD Position + Orientation
 
 </br>
 
-> As in the provided example project, we recommend initializing _VoyagerDevice_ in `Awake()`.
+### 03 | TimelineControl Properties
+
+![TimelineControl Properties](Docs/TimelineControlProperties.png)
+
+This component is required if your project is using 1 or more `PlayableDirector` to run the experience.
+
+1. Set the Timeline UI references to handle Scrubbing, Pause, Play, etc..
+2. Bind your Timeline UI buttons to VoyagerManager methods like `Play(), Pause(), PlayPause(), Mute(), NextTrack(), PrevTrack()` etc..
+3. Use the `TrackSetups` Array to add your **PlayableDirector** reference(s) and their associated **MotionProfile** ( name of the Motion data file used by the Chair ).
+
+</br>
+
+---------------------------------------------------------------------------
+
+## Using the API - CSharp
+
+### 01 | Construct and Init() a VoyagerDevice
+
+```csharp
+var voyagerDevice = VoyagerDevice.Instance; // Init Singleton
+if( voyagerDevice == null )
+{
+	Debug.LogError("Failed to create VoyagerDevice Singleton.");
+	yield break;
+}
+```
+
+Once created, the instance must be initialized with the desired network-connection settings.
+
+```csharp
+// Load config from file
+VoyagerDeviceConfig config = VoyagerDeviceUtils.LoadDeviceConfigFile("Config", "InterfaceConfig.json");
+
+// Initialize interface
+VoyagerDevice.Init(config);
+
+// Error: Not initialized
+if( !VoyagerDevice.IsInitialized )
+{
+	Debug.LogError("VoyagerDevice not initialized.");
+	yield break;
+}
+```
+
+### 02 | Connect VoyagerDevice to PSM
+
+The following sequence of calls ensures that the newly created `UVoyagerDevice` instance is linked with the **Positronic Show Manager** ( PSM ) that controls the chair.
+
+```csharp
+// Set the Content Params.
+VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
+
+// Experience should start in Paused state.
+VoyagerDevice.Pause();
+
+// Set the Content ID.
+VoyagerDevice.LoadContent("C:/ExecutableName.exe");
+
+// Notify PSM that loading is complete.
+VoyagerDevice.Loaded(true);
+
+// Set the initial Motion Profile track name.
+VoyagerDevice.SetMotionProfile( "TestProfile" );
+```
+
+### 03 | Listen To UVoyagerDevice Events
+
+The `VoyagerDevice` has useful events that you can Bind to in order to control your experience. These events are triggered based on calls from Positronic Show Manager ( PSM ).
+
+```csharp
+VoyagerDevice.OnPlayStateChange += OnVoyagerPlayStateChange;
+VoyagerDevice.OnPlay += OnVoyagerPlay;
+VoyagerDevice.OnPaused += OnVoyagerPaused;
+VoyagerDevice.OnStopped += OnVoyagerStopped;
+VoyagerDevice.OnMuteToggle += OnVoyagerToggleMute;
+VoyagerDevice.OnRecenter += OnVoyagerRecenterHMD;
+VoyagerDevice.OnMotionProfileChange += OnVoyagerMotionProfileChange;
+```
+
+### 04 | Send Experience Time back to PSM
+
+```csharp
+switch( VoyagerDevice.PlayState )
+{
+	case VoyagerDevicePlayState.Play:
+	{
+		experienceTime += Time.deltaTime;
+		VoyagerDevice.SendTimeSeconds(experienceTime);
+		break;
+	}
+
+	case VoyagerDevicePlayState.Pause:
+	{
+		VoyagerDevice.SendTimeSeconds(experienceTime);
+		break;
+	}
+}
+```
+
+For the Voyager Chair to accurately synchronize motion with the experience, you must frequently send the current _Experience Time_ back to PSM. Think of this as the current playback-time of your experience i.e. When the experience is paused time will not increase.
+
+**Caveats**:
+
+* You must continue to send _Experience Time_ back to PSM even if the Voyager state is Paused.
+* If PSM stops receiving time data from the API for a certain duration it will cause errors.
+
+### 05 | Key Commands for Motion Encoding and Testing
+
+For us to easily create Motion data for your experience, and test it, we require projects to support the following Keyboard commands.
+
+Key 				| Command 						
+ :------			|  :------						
+`Spacebar`			| Toggle Play-Pause			
+`Right-Left Arrows`	| Skip Forward-Backward 10 Seconds
+`Up-Down Arrows`	| Skip Forward-Backward 30 Seconds
+`R`					| Recenter HMD Position + Orientation
+
+</br>
 
 ---------------------------------------------------------------------------
 

@@ -10,6 +10,12 @@ namespace Positron
 	 * and execute the commands from the Voyager Interface*/
 	public class VoyagerManager : MonoBehaviour
 	{
+		[ Header("Content Path") ]
+
+		// Path for this application's executable
+		[ SerializeField ]
+		private string path = "C:/ExecutableName.exe";
+
 		[ Header("Timeline") ]
 
 		public TimelineControl timelineControl = null;
@@ -21,10 +27,6 @@ namespace Positron
 
 		[ Range(1, 30), Tooltip("Stagger SendTime() updates to Voyager to reduce JSON parse mem-alloc.\n'N' == SendTime() every Nth frame.\nRequires 'OptimizeMemAlloc' ON to work.") ]
 		public int voyagerSendTimeInterval = 1;
-
-		// Path for this application's executable
-		[ SerializeField ]
-		private string path;
 
 		// Return timeScale to previous saved value since we are overriding it
 		private float previousTimeScale = 1f;
