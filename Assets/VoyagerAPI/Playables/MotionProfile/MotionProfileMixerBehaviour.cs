@@ -35,7 +35,7 @@ public class MotionProfileMixerBehaviour : PlayableBehaviour
         {
             float inputWeight = playable.GetInputWeight(i);
             ScriptPlayable<MotionProfileBehaviour> inputPlayable = (ScriptPlayable<MotionProfileBehaviour>)playable.GetInput(i);
-            MotionProfileBehaviour input = inputPlayable.GetBehaviour ();
+            MotionProfileBehaviour input = inputPlayable.GetBehaviour();
 
             totalWeight += inputWeight;
 

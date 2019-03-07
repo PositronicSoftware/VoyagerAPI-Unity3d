@@ -125,10 +125,10 @@ namespace Positron
 
 		public void SeekToMS( float timeMS )
 		{
-			SeekToSeconds( timeMS / 1000f );
+			SeekToSeconds( timeMS * 0.001f );
 		}
 
-		void Play()
+		public void PlayTrack()
 		{
 			if( director != null )
 			{
@@ -151,7 +151,7 @@ namespace Positron
 			}
 		}
 
-		void Pause()
+		public void PauseTrack()
 		{
 			if( director != null )
 			{
@@ -195,6 +195,7 @@ namespace Positron
 				{
 					director.Stop();
 					director = trackDef.track;
+					director.extrapolationMode = DirectorWrapMode.Hold;
 
 					VoyagerDevice.SetMotionProfile( trackDef.motionProfile );
 					SeekToSeconds( 0 );
@@ -203,13 +204,13 @@ namespace Positron
 					{
 						case VoyagerDevicePlayState.Play:
 						{
-							OnVoyagerPlay();
+							PlayTrack();
 							break;
 						}
 
 						case VoyagerDevicePlayState.Pause:
 						{
-							OnVoyagerPaused();
+							PauseTrack();
 							break;
 						}
 					}
@@ -241,7 +242,7 @@ namespace Positron
 
 			if( wasPlayingOnScrub )
 			{
-				Pause();
+				PauseTrack();
 			}
 		}
 
@@ -251,7 +252,7 @@ namespace Positron
 
 			if( wasPlayingOnScrub )
 			{
-				Play();
+				PlayTrack();
 
 				wasPlayingOnScrub = false;
 			}
@@ -280,7 +281,7 @@ namespace Positron
 		{
 			float timeMS = GetTimeMS();
 			VoyagerDevice.SendTime((int)timeMS);
-			return timeMS / 1000f;
+			return timeMS * 0.001f;
 		}
 
 		string ConvertMillisecondsToString(int timeMS)
@@ -301,6 +302,7 @@ namespace Positron
 			{
 				var firstDef = TrackSetups[ currentTrackIndex ];
 				director = firstDef.track;
+				director.extrapolationMode = DirectorWrapMode.Hold;
 			}
 			if( director == null )
 			{
@@ -310,44 +312,27 @@ namespace Positron
 			// ~===============================================
 			// Bind Events
 
-			VoyagerDevice.OnPlay += OnVoyagerPlay;
-			VoyagerDevice.OnPaused += OnVoyagerPaused;
-			VoyagerDevice.OnStopped += OnVoyagerStopped;
 			VoyagerDevice.OnMuteToggle += OnVoyagerToggleMute;
 			VoyagerDevice.OnMotionProfileChange += OnVoyagerMotionProfileChange;
 
 			// ~===============================================
 			// Initialize
+
 			switch( VoyagerDevice.PlayState )
 			{
 				case VoyagerDevicePlayState.Play:
 				{
-					OnVoyagerPlay();
+					PlayTrack();
 					break;
 				}
 
 				case VoyagerDevicePlayState.Pause:
 				{
-					OnVoyagerPaused();
+					PauseTrack();
 					break;
 				}
 			}
 			OnVoyagerToggleMute( VoyagerDevice.IsMuted );
-		}
-
-		void OnVoyagerPlay()
-		{
-			Play();
-		}
-
-		void OnVoyagerPaused()
-		{
-			Pause();
-		}
-
-		void OnVoyagerStopped()
-		{
-			// React to Stop state event.
 		}
 
 		void OnVoyagerToggleMute( bool InValue )
@@ -397,7 +382,7 @@ namespace Positron
 
 			// Do Seek correction if Profile has changed.
 			if( VoyagerDevice.DeviceMotionProfileTime != VoyagerDevice.PrevDeviceMotionProfileTime
-				&& !Mathf.Approximately((float)directorCachedTimeSec, VoyagerDevice.DeviceMotionProfileTime / 1000f ))
+				&& !Mathf.Approximately((float)directorCachedTimeSec, VoyagerDevice.DeviceMotionProfileTime * 0.001f ))
 			{
 				SeekToMS((float)VoyagerDevice.DeviceMotionProfileTime);
 			}

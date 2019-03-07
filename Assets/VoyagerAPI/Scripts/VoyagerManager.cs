@@ -90,88 +90,125 @@ namespace Positron
 
 		public void PlayPause()
 		{
-			VoyagerDevice.PlayPause();
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
+			{
+				VoyagerDevice.PlayPause();
+			}
 		}
 
 		public void Play()
 		{
-			if( VoyagerDevice.PlayState == VoyagerDevicePlayState.Pause )
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
-				VoyagerDevice.PlayPause();
+				VoyagerDevice.Play();
 			}
 		}
 
 		public void Pause()
 		{
-			if( VoyagerDevice.PlayState == VoyagerDevicePlayState.Play )
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
-				VoyagerDevice.PlayPause();
+				VoyagerDevice.Pause();
 			}
 		}
 
 		public void SeekForward10()
 		{
-			experienceTime += 10;
-
-			if( timelineControl )
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
-				experienceTime = timelineControl.SeekToSeconds( experienceTime );
+				experienceTime += 10;
+
+				if( timelineControl )
+				{
+					experienceTime = timelineControl.SeekToSeconds( experienceTime );
+				}
 			}
 		}
 
 		public void SeekBack10()
 		{
-			experienceTime = Mathf.Max( 0f, experienceTime - 10f );
-
-			if( timelineControl )
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
-				experienceTime = timelineControl.SeekToSeconds( experienceTime );
+				experienceTime = Mathf.Max( 0f, experienceTime - 10f );
+
+				if( timelineControl )
+				{
+					experienceTime = timelineControl.SeekToSeconds( experienceTime );
+				}
 			}
 		}
 
 		public void SeekForward30()
 		{
-			experienceTime += 30;
-
-			if( timelineControl )
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
-				experienceTime = timelineControl.SeekToSeconds( experienceTime );
+				experienceTime += 30;
+
+				if( timelineControl )
+				{
+					experienceTime = timelineControl.SeekToSeconds( experienceTime );
+				}
 			}
 		}
 
 		public void SeekBack30()
 		{
-			experienceTime = Mathf.Max( 0f, experienceTime - 30f );
-
-			if( timelineControl )
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
-				experienceTime = timelineControl.SeekToSeconds( experienceTime );
+				experienceTime = Mathf.Max( 0f, experienceTime - 30f );
+
+				if( timelineControl )
+				{
+					experienceTime = timelineControl.SeekToSeconds( experienceTime );
+				}
 			}
 		}
 
 		public void NextTrack()
 		{
-			if( timelineControl )
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
-				lastTrackSwitchTime = Time.realtimeSinceStartup;
-				timelineControl.NextTrack();
-			}
-			else
-			{
-				Debug.LogError("No TimelineControl component set.");
+				if( timelineControl )
+				{
+					lastTrackSwitchTime = Time.realtimeSinceStartup;
+					timelineControl.NextTrack();
+				}
+				else
+				{
+					Debug.LogError("No TimelineControl component set.");
+				}
 			}
 		}
 
 		public void PreviousTrack()
 		{
-			if( timelineControl )
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
-				lastTrackSwitchTime = Time.realtimeSinceStartup;
-				timelineControl.PreviousTrack();
+				if( timelineControl )
+				{
+					lastTrackSwitchTime = Time.realtimeSinceStartup;
+					timelineControl.PreviousTrack();
+				}
+				else
+				{
+					Debug.LogError("No TimelineControl component set.");
+				}
 			}
-			else
+		}
+
+		public void SetPlayableTrack( int trackIndex )
+		{
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
-				Debug.LogError("No TimelineControl component set.");
+				if( timelineControl )
+				{
+					lastTrackSwitchTime = Time.realtimeSinceStartup;
+					timelineControl.SwitchPlayableTrack( trackIndex );
+				}
+				else
+				{
+					Debug.LogError("No TimelineControl component set.");
+				}
 			}
 		}
 
@@ -312,12 +349,18 @@ namespace Positron
 
 		void OnVoyagerPlay()
 		{
-			// React to Play state event.
+			if( timelineControl )
+			{
+				timelineControl.PlayTrack();
+			}
 		}
 
 		void OnVoyagerPaused()
 		{
-			// React to Paused state event.
+			if( timelineControl )
+			{
+				timelineControl.PauseTrack();
+			}
 		}
 
 		void OnVoyagerStopped()

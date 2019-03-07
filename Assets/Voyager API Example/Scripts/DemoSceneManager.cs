@@ -9,15 +9,18 @@ using UnityEngine.UI;
 
 namespace Positron
 {
-	public class SceneManager : MonoBehaviour
+	public class DemoSceneManager : MonoBehaviour
 	{
 		public GameObject bullet;
 		public GameObject gazePoint;
 		public float shootForce;
-		public UnityEngine.UI.Text debugText;
 		public VRStandardAssets.Flyer.FlyerLaserController laserController;
 
-		// Use this for initialization
+		private void Awake()
+		{
+			DontDestroyOnLoad( this );
+		}
+
 		IEnumerator Start()
 		{
 			while( VoyagerDevice.Instance == null && !VoyagerDevice.IsInitialized )
@@ -40,6 +43,7 @@ namespace Positron
 				if( bullet != null && gazePoint != null )
 				{
 					GameObject shot = GameObject.Instantiate(bullet, gazePoint.transform.position, gazePoint.transform.rotation);
+
 					// Add force to the cloned object in the object's forward direction
 					shot.GetComponent<Rigidbody>().AddForce(shot.transform.forward * shootForce);
 				}
@@ -47,12 +51,6 @@ namespace Positron
 				{
 					laserController.ShootLasers();
 				}
-			}
-
-			// Show Debug Text
-			if( Input.GetKeyUp(KeyCode.D))
-			{
-				debugText.transform.parent.gameObject.SetActive(!debugText.transform.parent.gameObject.activeSelf);
 			}
 		}
 	}
