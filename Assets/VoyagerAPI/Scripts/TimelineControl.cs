@@ -1,6 +1,7 @@
 /* Copyright Positron 2018 - Code by Brad Nelson */
 
 using System;
+using System.Linq;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Playables;
@@ -8,12 +9,25 @@ using UnityEngine.UI;
 
 namespace Positron
 {
+	[ Serializable ]
+	public class VoyagerTrackSetup
+	{
+		[ SerializeField ]
+		public string motionProfile;
+
+		[ SerializeField ]
+		public PlayableDirector track;
+
+		public bool IsValid()
+		{
+			return !string.IsNullOrEmpty( motionProfile ) && (track != null);
+		}
+	}
+
 	public class TimelineControl : MonoBehaviour
 	{
-		public VoyagerManager voyagerManager;
-		public PlayableDirector director;
+		[ Header("Timeline UI") ]
 
-		// 2D UI
 		public CanvasGroup menuCanvas;
 		public RectTransform bottomUI2D;
 		private Vector2 startBottomUI2DPos;
@@ -37,8 +51,15 @@ namespace Positron
 		public Text position2DText;
 		public Text duration2DText;
 
+		[ Header("Playable Tracks") ]
+
 		public float seekTime = 5000f;
 		public float seekTimeFast = 7000f;
+		private PlayableDirector director;
+		public VoyagerTrackSetup[] TrackSetups;
+		private int currentTrackIndex = 0;
+		private float lastTrackSwitchTime = 0f;
+		private float lastTrackSwitchDelay = 1f;
 
 		[ Header("Optimization") ]
 
@@ -48,248 +69,182 @@ namespace Positron
 		[ Range(1, 30), Tooltip("Stagger SendTime() updates to Voyager to reduce JSON parse mem-alloc.\n'N' == SendTime() every Nth frame.\nRequires 'OptimizeMemAlloc' ON to work.") ]
 		public int voyagerSendTimeInterval = 1;
 
-		private int currentTrack = 0;
-		private float lastSwitchTime = 0f;
-		private float lastSwitchDelay = 1f;
-		private double directorCachedTime = 0;
-		private double directorCachedDuration = 1;
+		private double directorCachedTimeSec = 0;
+		private double directorCachedDurationSec = 1;
 		private StringBuilder timeStampSB = new StringBuilder("00:00:00", 8);
-		private MotionProfile motionProfile;
 
-		private bool _trackForward = false;
-		public bool trackForward
+		public bool HasTrackSetups
 		{
-			get
-			{
-				return _trackForward;
-			}
-			set
-			{
-				_trackForward = value;
-			}
+			get{ return TrackSetups.Length > 0; }
 		}
 
-		private bool _trackBack = false;
-		public bool trackBack
+		public int CurrentTrackIndex
 		{
-			get
-			{
-				return _trackBack;
-			}
-			set
-			{
-				_trackBack = value;
-			}
+			get{ return currentTrackIndex; }
 		}
 
-		public void TrackBack()
+		public VoyagerTrackSetup CurrentTrackDefinition
 		{
-			_trackBack = true;
-			_trackForward = false;
+			get{ return TrackSetups[ currentTrackIndex ]; }
+		}
+
+		public PlayableDirector CurrentTrack
+		{
+			get{ return director; }
 		}
 
 		public void TrackForward()
 		{
-			_trackBack = false;
-			_trackForward = true;
+			SwitchPlayableTrack( currentTrackIndex + 1 );
+		}
+
+		public void TrackBack()
+		{
+			SwitchPlayableTrack( currentTrackIndex - 1 );
 		}
 
 		// overrideTime = bool, override the Interface send time or not
 		static private bool _overrideTime = false;
-		static public bool overrideTime
+		static public bool OverrideTime
 		{
-			get
-			{
-				return _overrideTime;
-			}
-		}
-
-		public void Rewind()
-		{
-			if( director != null )
-			{
-				videoSeekSlider2D.value = (GetTime() - seekTime) / GetDuration();
-
-				VoyagerDevice.SendTime((int)(GetTime() - seekTime));
-			}
-			else
-			{
-				Debug.LogError("Need a SwitchTrack component with a Playable Director");
-			}
+			get{ return _overrideTime; }
 		}
 
 		public float GetTime()
 		{
-			return (float)directorCachedTime * 1000f;
+			return (float)directorCachedTimeSec * 1000f;
 		}
 
 		public float GetDuration()
 		{
-			return (float)directorCachedDuration * 1000f;
+			return (float)directorCachedDurationSec * 1000f;
 		}
 
-		public void Seek(float time)
+		public void Seek( float timeMS )
 		{
 			if( director != null )
 			{
-				director.time = ((double)(time / 1000f));
+				director.time = ((double)(Mathf.Max( 0f, timeMS ) / 1000f));
 				director.Evaluate();
-				VoyagerDevice.SendTime((int)(time));
+				VoyagerDevice.SendTime((int)(timeMS));
 			}
 			else
 			{
-				Debug.LogError("Need a SwitchTrack component with a Playable Director");
+				Debug.LogError("Need TrackSetups with a Playable Director");
 			}
 		}
 
 		public void Seek()
 		{
-			if( director != null )
-			{
-				videoSeekSlider2D.value = (GetTime() + seekTime) / GetDuration();
-
-				VoyagerDevice.SendTime((int)(GetTime() + seekTime));
-			}
-			else
-			{
-				Debug.LogError("Need a SwitchTrack component with a Playable Director");
-			}
+			Seek( GetTime() + seekTime );
 		}
 
-		public bool IsPlaying()
+		public void Rewind()
 		{
-			return (Time.timeScale == 1f && director != null && director.state == PlayState.Playing);
+			Seek( GetTime() - seekTime );
 		}
 
-		public void Play()
+		void Play()
 		{
 			if( director != null )
 			{
-				// director.Resume();
-				if( director.state == PlayState.Playing )
-				{
-					director.playableGraph.GetRootPlayable(0).SetSpeed(1);
-				}
-				else
+				if( director.state != PlayState.Playing )
 				{
 					director.Play();
-					director.playableGraph.GetRootPlayable(0).SetSpeed(1);
-					Debug.Log("Playing director");
 				}
+				var playGraph = director.playableGraph;
+				if( playGraph.IsValid())
+				{
+					playGraph.GetRootPlayable(0).SetSpeed(1);
+				}
+				// Debug.Log("Play Director");
 
-				VoyagerDevice.SendTime((int)GetTime());
-				// Interface.Play();
+				SetTime();
 
 				playButton2D.image.sprite = pauseSprite2D;
 			}
 			else
 			{
-				Debug.LogError("Need a SwitchTrack component with a Playable Director");
+				Debug.LogError("Need TrackSetups with a Playable Director");
 			}
 		}
 
-		public void Pause()
+		void Pause()
 		{
 			if( director != null )
 			{
-				// director.Pause();
-				if( director.state == PlayState.Playing )
+				var playGraph = director.playableGraph;
+				if( playGraph.IsValid())
 				{
-					director.playableGraph.GetRootPlayable(0).SetSpeed(0);
+					playGraph.GetRootPlayable(0).SetSpeed(0);
+				}
+				if( director.state != PlayState.Paused )
+				{
 					director.Pause();
 				}
+				// Debug.Log("Pause Director");
 
-				VoyagerDevice.SendTime((int)GetTime());
-				// Interface.Pause();
+				SetTime();
 
 				playButton2D.image.sprite = playSprite2D;
 			}
 			else
 			{
-				Debug.LogError("Need a SwitchTrack component with a Playable Director");
+				Debug.LogError("Need TrackSetups with a Playable Director");
 			}
 		}
 
-		public void PlayPause()
+		public void SwitchPlayableTrack( int trackIndex )
 		{
-			if( voyagerManager != null )
+			if( trackIndex == currentTrackIndex ) { return; }
+
+			int numTracks = TrackSetups.Length;
+			if( numTracks > 0 )
 			{
-				voyagerManager.PlayPause();
+				if( trackIndex > -1 )
+				{
+					currentTrackIndex = trackIndex % numTracks;
+				}
+				else
+				{
+					currentTrackIndex = Mathf.Max( 0, numTracks + trackIndex );
+				}
+
+				var trackDef = TrackSetups[ currentTrackIndex ];
+				if( trackDef.IsValid())
+				{
+					lastTrackSwitchTime = Time.time;
+
+					director.Stop();
+					director = trackDef.track;
+
+					VoyagerDevice.SetMotionProfile( trackDef.motionProfile );
+					Seek( 0 );
+
+					switch( VoyagerDevice.PlayState )
+					{
+						case VoyagerDevicePlayState.Play:
+						{
+							OnVoyagerPlay();
+							break;
+						}
+
+						case VoyagerDevicePlayState.Pause:
+						{
+							OnVoyagerPaused();
+							break;
+						}
+					}
+				}
+				else
+				{
+					Debug.LogError( "TrackDefinition is NOT valid! Make sure both 'Direction' and 'MotionProfile' name are set." );
+				}
 			}
 			else
 			{
-				Debug.LogError("Need a VoyagerManager");
+				Debug.LogError( "No TrackDefinition(s) setup" );
 			}
-
-			if( VoyagerDevice.IsPaused )
-			{
-				Pause();
-			}
-			else
-			{
-				Play();
-			}
-		}
-
-		public void SetFullScreen()
-		{
-			if( !Screen.fullScreen )
-			{
-				Screen.SetResolution(Screen.currentResolution.width, Screen.currentResolution.height, true);
-			}
-			else
-			{
-				Screen.SetResolution(1024, 768, false);
-			}
-			CheckFullscreen();
-		}
-
-		public void CheckFullscreen()
-		{
-			if( Screen.fullScreen )
-			{
-				fullScreenButton.image.sprite = windowSprite2D;
-			}
-			else
-			{
-				fullScreenButton.image.sprite = fullscreenSprite2D;
-			}
-		}
-
-		public void ToggleMute(bool mute)
-		{
-			if( mute )
-			{
-				// muteButton.image.sprite = muteOnSprite;
-				muteButton2D.image.sprite = muteOnSprite;
-			}
-			else
-			{
-				// muteButton.image.sprite = muteOffSprite;
-				muteButton2D.image.sprite = muteOffSprite;
-			}
-		}
-
-		public void ToggleMute()
-		{
-			VoyagerDevice.ToggleMute();
-
-			voyagerManager.Mute(VoyagerDevice.IsMuted);
-
-			ToggleMute(VoyagerDevice.IsMuted);
-		}
-
-		private string ConvertTime(int ms)
-		{
-			var timeSpan = TimeSpan.FromMilliseconds(ms);
-			timeStampSB.Remove(0, 8);
-			timeStampSB.AppendFormat("{0:D2}:{1:D2}:{2:D2}", timeSpan.Hours, timeSpan.Minutes, timeSpan.Seconds);
-			return timeStampSB.ToString();
-		}
-
-		public void SetTime()
-		{
-			VoyagerDevice.SendTime((int)GetTime());
 		}
 
 		public void OnVideoSeekSlider2D()
@@ -324,7 +279,6 @@ namespace Positron
 			}
 		}
 
-		// Toggle the menu
 		public void ToggleMenu()
 		{
 			if( menuCanvas != null )
@@ -344,82 +298,167 @@ namespace Positron
 			}
 		}
 
-		// Use this for initialization
+		string ConvertTime(int timeMS)
+		{
+			var timeSpan = TimeSpan.FromMilliseconds(timeMS);
+			timeStampSB.Remove(0, 8);
+			timeStampSB.AppendFormat("{0:D2}:{1:D2}:{2:D2}", timeSpan.Hours, timeSpan.Minutes, timeSpan.Seconds);
+			return timeStampSB.ToString();
+		}
+
+		void SetTime()
+		{
+			VoyagerDevice.SendTime((int)GetTime());
+		}
+
 		void Start()
 		{
 			startBottomUI2DPos = bottomUI2D.anchoredPosition;
 			pos = startBottomUI2DPos;
 			_overrideTime = true;
+
+			currentTrackIndex = 0;
+			if( TrackSetups.Length > 0 && TrackSetups[ currentTrackIndex ].IsValid())
+			{
+				var firstDef = TrackSetups[ currentTrackIndex ];
+				director = firstDef.track;
+			}
+			if( director == null )
+			{
+				Debug.LogError( "PlayableDirector must be set in the 'TracksDefinitions' Array!" );
+			}
+
+			// ~===============================================
+			// Bind Events
+
+			VoyagerDevice.OnPlay += OnVoyagerPlay;
+			VoyagerDevice.OnPaused += OnVoyagerPaused;
+			VoyagerDevice.OnStopped += OnVoyagerStopped;
+			VoyagerDevice.OnMuteToggle += OnVoyagerToggleMute;
+			VoyagerDevice.OnMotionProfileChange += OnVoyagerMotionProfileChange;
+
+			// ~===============================================
+			// Initialize
+			switch( VoyagerDevice.PlayState )
+			{
+				case VoyagerDevicePlayState.Play:
+				{
+					OnVoyagerPlay();
+					break;
+				}
+
+				case VoyagerDevicePlayState.Pause:
+				{
+					OnVoyagerPaused();
+					break;
+				}
+			}
+			OnVoyagerToggleMute( VoyagerDevice.IsMuted );
+		}
+
+		void OnVoyagerPlay()
+		{
+			Play();
+		}
+
+		void OnVoyagerPaused()
+		{
+			Pause();
+		}
+
+		void OnVoyagerStopped()
+		{
+			// React to Stop state event.
+		}
+
+		void OnVoyagerToggleMute( bool InValue )
+		{
+			if( muteButton2D )
+			{
+				muteButton2D.image.sprite = InValue ? muteOnSprite : muteOffSprite;
+			}
+		}
+
+		void OnVoyagerMotionProfileChange( string InProfile )
+		{
+			if( HasTrackSetups )
+			{
+				// If new profile does not match the current track.
+				if( !string.IsNullOrEmpty( InProfile ) && CurrentTrackDefinition.motionProfile != InProfile )
+				{
+					var newTrack = TrackSetups.FirstOrDefault( e => (e.motionProfile.ToLower() == InProfile.ToLower()));
+					if( newTrack != null )
+					{
+						SwitchPlayableTrack( System.Array.IndexOf( TrackSetups, newTrack ));
+					}
+					else
+					{
+						Debug.LogError("Voyager Transitioned to MotionProfile '" + InProfile + "' not supported by TimelineControl" );
+					}
+				}
+			}
 		}
 
 		void Update()
 		{
-			if( Input.GetKeyDown(KeyCode.H))
-			{
-				ToggleMenu();
-			}
-
-			if( VoyagerDevice.Instance == null )
-			{
-				return;
-			}
-
 			if( director == null )
 			{
 				Debug.LogError("Need a PlayableDirector");
 				return;
 			}
 
+			if( VoyagerDevice.Instance == null || !VoyagerDevice.IsInitialized )
+			{
+				return;
+			}
+
+			if( Input.GetKeyDown(KeyCode.H))
+			{
+				ToggleMenu();
+			}
+
+			// Switch tracks with the Oculus Remote DPad left and right
+			if( Time.time - lastTrackSwitchTime > lastTrackSwitchDelay )
+			{
+				if( Input.GetAxis("Horizontal") >= 1.0f )
+				{
+					lastTrackSwitchTime = Time.time;
+					TrackForward();
+				}
+				else if( Input.GetAxis("Horizontal") <= -1.0f )
+				{
+					lastTrackSwitchTime = Time.time;
+					TrackBack();
+				}
+			}
+
 			// These PlayableDirector getters() cause mem allocations and are therefore called once & cached here.
-			directorCachedTime = director.time;
-			directorCachedDuration = director.duration;
+			directorCachedTimeSec = director.time;
+			directorCachedDurationSec = director.duration;
+
+			// Do Seek correction if Profile has changed.
+			if( VoyagerDevice.DeviceMotionProfileTime != VoyagerDevice.PrevDeviceMotionProfileTime
+				&& !Mathf.Approximately((float)directorCachedTimeSec, VoyagerDevice.DeviceMotionProfileTime / 1000f ))
+			{
+				Seek((float)VoyagerDevice.DeviceMotionProfileTime);
+			}
+
+			if( VoyagerDevice.IsContentLoaded )
+			{
+				if( VoyagerDevice.IsFastForwarding )
+				{
+					Seek();
+				}
+				else if( VoyagerDevice.IsRewinding )
+				{
+					Rewind();
+				}
+			}
 
 			int tickNum = Time.frameCount;
-			if( VoyagerDevice.IsInitialized )
+			if( !optimizeMemAlloc || (tickNum % voyagerSendTimeInterval) == 0 )
 			{
-				if( VoyagerDevice.IsUpdated )
-				{
-					if( VoyagerDevice.DeviceMotionProfileTime != VoyagerDevice.PrevDeviceMotionProfileTime
-						&& director != null && director.time != ((double)(VoyagerDevice.DeviceMotionProfileTime / 1000)))
-					{
-						Seek((float)VoyagerDevice.DeviceMotionProfileTime);
-					}
-
-					if( VoyagerDevice.IsRecentering )
-					{
-						voyagerManager.Recenter();
-					}
-
-					if( VoyagerDevice.IsContentLoaded )
-					{
-						if( !VoyagerDevice.IsPaused && !IsPlaying())
-						{
-							Play();
-						}
-
-						if( VoyagerDevice.IsPaused && IsPlaying()
-							|| VoyagerDevice.IsPaused && Time.timeScale == 0f && director != null && director.state == PlayState.Playing )
-						{
-							Pause();
-						}
-
-						if( VoyagerDevice.IsFastForwarding )
-						{
-							Seek();
-						}
-						else if( VoyagerDevice.IsRewinding )
-						{
-							Rewind();
-						}
-
-						ToggleMute(VoyagerDevice.IsMuted);
-					}
-				}
-
-				if( !optimizeMemAlloc || (tickNum % voyagerSendTimeInterval) == 0 )
-				{
-					SetTime();
-				}
+				SetTime();
 			}
 
 			float durationMS = GetDuration();
@@ -444,7 +483,15 @@ namespace Positron
 
 			playButton2D.image.sprite = (director.state == PlayState.Playing ? pauseSprite2D : playSprite2D);
 
-			CheckFullscreen();
+			// Check full-screen icon.
+			if( Screen.fullScreen )
+			{
+				fullScreenButton.image.sprite = windowSprite2D;
+			}
+			else
+			{
+				fullScreenButton.image.sprite = fullscreenSprite2D;
+			}
 
 			// Set Bottom UI to zero position
 			pos = Vector2.zero;

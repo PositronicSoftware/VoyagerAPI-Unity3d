@@ -16,16 +16,17 @@ public class MotionProfileMixerBehaviour : PlayableBehaviour
         m_TrackBinding = playerData as MotionProfile;
 
         if (m_TrackBinding == null)
+		{
             return;
+		}
 
         if (!m_FirstFrameHappened)
         {
-            m_ProfileName = m_TrackBinding.profileName;
+            m_ProfileName = m_TrackBinding.ProfileName;
             m_FirstFrameHappened = true;
         }
 
-        int inputCount = playable.GetInputCount ();
-
+        int inputCount = playable.GetInputCount();
         float totalWeight = 0f;
         float greatestWeight = 0f;
         int currentInputs = 0;
@@ -40,7 +41,7 @@ public class MotionProfileMixerBehaviour : PlayableBehaviour
 
             if (inputWeight > greatestWeight)
             {
-                m_TrackBinding.profileName = input.profileName;
+                m_TrackBinding.ProfileName = input.profileName;
                 greatestWeight = inputWeight;
             }
 
@@ -50,18 +51,23 @@ public class MotionProfileMixerBehaviour : PlayableBehaviour
 
         if (currentInputs != 1 && 1f - totalWeight > greatestWeight)
         {
-            m_TrackBinding.profileName = m_ProfileName;
+            m_TrackBinding.ProfileName = m_ProfileName;
         }
 
-		if (Application.isPlaying) {
-			if (!VoyagerDevice.IsUpdated && VoyagerDevice.IsInitialized && !TimelineControl.overrideTime) {
+		if (Application.isPlaying)
+		{
+			if (!VoyagerDevice.IsUpdated && VoyagerDevice.IsInitialized && !TimelineControl.OverrideTime)
+			{
 				VoyagerDevice.SetTimeSeconds((float)playable.GetTime());
 			}
 		}
     }
 
-    public override void OnGraphStop (Playable playable)
+    public override void OnGraphStop( Playable playable )
     {
-        m_TrackBinding.profileName = m_ProfileName;
+		if( m_TrackBinding  )
+		{
+			m_TrackBinding.ProfileName = m_ProfileName;
+		}
     }
 }

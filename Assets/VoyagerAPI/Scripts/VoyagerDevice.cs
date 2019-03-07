@@ -26,11 +26,13 @@ namespace Positron
 	}
 
 	// Device Play State Id.
-	public enum VoyagerDevicePlayState { Stop, Play, Pause, Idle }
+	public enum VoyagerDevicePlayState { Stop, Play, Pause }
 
 	public delegate void VoyagerEventDelegate();
 
 	public delegate void VoyagerPlayStateEventDelegate( VoyagerDevicePlayState InState );
+
+	public delegate void VoyagerMotionProfileEventDelegate( string InProfile );
 
 	public delegate void VoyagerToggleEventDelegate( bool InValue );
 
@@ -48,7 +50,8 @@ namespace Positron
 
 					if( _instance == null )
 					{
-						_instance = new GameObject("Positron Interface").AddComponent<VoyagerDevice>();
+						_instance = new GameObject("_VoyagerDeviceAPI").AddComponent<VoyagerDevice>();
+
 						DontDestroyOnLoad(_instance.gameObject);
 					}
 				}
@@ -102,6 +105,9 @@ namespace Positron
 		static public event VoyagerEventDelegate OnStopped;
 		static public event VoyagerEventDelegate OnRecenter;
 		static public event VoyagerToggleEventDelegate OnMuteToggle;
+		static public event VoyagerEventDelegate OnFastForward;
+		static public event VoyagerEventDelegate OnRewind;
+		static public event VoyagerMotionProfileEventDelegate OnMotionProfileChange;
 
 		// The current state used by the Interface.  State.Stop, State.Play, State.Pause
 		static public VoyagerDevicePlayState _playState = VoyagerDevicePlayState.Stop;
@@ -125,7 +131,7 @@ namespace Positron
 		}
 
 		// startMotionTime = float, the time the motion profile started
-		static private float motionProfileStartTime = 0f;
+		static private float _motionProfileStartTime = 0f;
 
 		// Variables received from UDP //
 
@@ -232,13 +238,6 @@ namespace Positron
 		static public string MotionProfile
 		{
 			get{ return _motionProfile; }
-		}
-
-		// previousMotionProfile = string, the previous Motion Profile that was played in the Interface
-		static private string _previousMotionProfile;
-		static public string PreviousMotionProfile
-		{
-			get{ return _previousMotionProfile; }
 		}
 
 		// Call in Awake to initialize the Device-Interface correctly.
@@ -349,65 +348,16 @@ namespace Positron
 			}
 		}
 
-		// Stop receiving data from Voyager #todo review
-		static public void StopReceivingData()
-		{
-			if( Instance != null )
-			{
-				Instance.CloseReceivePort();
-			}
-		}
-
-		// Close the receiving port for the Interface to stop receiving #todo review
-		public void CloseReceivePort()
-		{
-			if( receiveThread != null )
-			{
-				receiveThread.Abort();
-			}
-			if( receiveClient != null )
-			{
-				receiveClient.Close();
-			}
-
-			lastRecvDevicePacket = null;
-			_isInitialized = false;
-
-			Debug.Log("VoyagerDevice >> Closed receiving port");
-		}
-
 		// Play or Pause the motion profile depending on the Interface.paused variable
 		static public void PlayPause()
 		{
-			if( _isPaused )
+			if( PlayState == VoyagerDevicePlayState.Pause )
 			{
 				Play();
 			}
-			else
+			else if( PlayState == VoyagerDevicePlayState.Play )
 			{
 				Pause();
-			}
-		}
-
-		static public void Idle()
-		{
-			if( IsInitialized )
-			{
-				_isPaused = true;
-
-				var prevState = _playState;
-				_playState = VoyagerDevicePlayState.Idle;
-				NotifyStateChange( prevState );
-
-				deviceState.@event.status = (int)_playState;
-				deviceState.@event.playPause = false;
-				SendData();
-
-				Debug.Log("VoyagerDevice >> | command | 'Idle'");
-			}
-			else
-			{
-				Debug.LogError("DeviceInterface is NOT initialized; Call Init( VoyagerDeviceConfig ) first!");
 			}
 		}
 
@@ -487,18 +437,34 @@ namespace Positron
 		// Sets Interface.rewind to true and Interface.forward to false
 		static public void Rewind()
 		{
-			_isFastForwarding = false;
+			var prevState = _isRewinding;
 			_isRewinding = true;
+			_isFastForwarding = false;
 
+			if( prevState != true )
+			{
+				if( OnRewind != null )
+				{
+					OnRewind();
+				}
+			}
 			Debug.Log("VoyagerDevice >> | command | 'Rewind'");
 		}
 
 		// Sets Interface.forward to true and Interface.rewind to false
 		static public void FastForward()
 		{
+			var prevState = _isFastForwarding;
 			_isFastForwarding = true;
 			_isRewinding = false;
 
+			if( prevState != true )
+			{
+				if( OnFastForward != null )
+				{
+					OnFastForward();
+				}
+			}
 			Debug.Log("VoyagerDevice >> | command | 'FastForward'");
 		}
 
@@ -513,7 +479,7 @@ namespace Positron
 			}
 			else
 			{
-				SendTimeSeconds((Time.time - motionProfileStartTime));
+				SendTimeSeconds((Time.time - _motionProfileStartTime));
 			}
 		}
 
@@ -755,20 +721,27 @@ namespace Positron
 
 		// Sets the motion profile for Voyager and initializes motion profile time.
 		// Sets the Interface.currentMotionProfile and Interface.previousMotionProfile variables.
-		static public void SetMotionProfile(string motionProfile)
+		static public void SetMotionProfile( string InProfileName )
 		{
 			if( IsInitialized )
 			{
-				_previousMotionProfile = motionProfile;
-				_motionProfile = motionProfile;
+				var prevProfile = _motionProfile;
+				_motionProfile = InProfileName;
+				if( prevProfile != _motionProfile )
+				{
+					_motionProfileStartTime = Time.time;
 
-				motionProfileStartTime = Time.time;
-				deviceState.@event.motionProfile = motionProfile;
+					if( OnMotionProfileChange != null )
+					{
+						OnMotionProfileChange( _motionProfile );
+					}
+				}
+
+				deviceState.@event.motionProfile = _motionProfile;
 				deviceState.@event.timePosition = 0;
-
 				SendData();
 
-				Debug.Log("VoyagerDevice >> | command | 'MotionProfile' " + motionProfile);
+				Debug.Log("VoyagerDevice >> | command | 'MotionProfile' " + _motionProfile);
 			}
 			else
 			{
@@ -838,15 +811,6 @@ namespace Positron
 			}
 		}
 
-		void OnEnable()
-		{
-			if( _instance == null )
-			{
-				_instance = this;
-				DontDestroyOnLoad(gameObject);
-			}
-		}
-
 		IEnumerator OnProcessRecvPacketsTick()
 		{
 			float tickRate = Mathf.Max(10, VoyagerDefaults.processRecvPacketsTickMS) * 0.001f;	// millisecond to second
@@ -862,14 +826,18 @@ namespace Positron
 							// Track prev params
 							_prevDeviceMotionProfileTime = _deviceMotionProfileTime;
 							_previousContentUrl = _contentUrl;
-							_previousMotionProfile = _motionProfile;
 
 							// Update params
 							_deviceMotionProfileTime = receivedPacket.@event.timePosition;
 							_isInLibrary = receivedPacket.@event.library;
 							_stereoscopyMode = receivedPacket.@event.stereoscopy;
 							_contentUrl = receivedPacket.@event.url;
-							_motionProfile = receivedPacket.@event.motionProfile;
+
+							// Handle Motion profile change
+							if( receivedPacket.@event.motionProfile != _motionProfile )
+							{
+								SetMotionProfile( receivedPacket.@event.motionProfile );
+							}
 
 							// Handle Recenter
 							if( receivedPacket.@event.recenter )
@@ -939,22 +907,17 @@ namespace Positron
 			}
 		}
 
-		void OnDisable()
+		void OnApplicationQuit()
 		{
-			StopCoroutine(OnProcessRecvPacketsTick());
-
-			if( receiveThread != null )
-			{
-				receiveThread.Abort();
-			}
-
-			if( receiveClient != null )
-			{
-				receiveClient.Close();
-			}
+			Cleanup();
 		}
 
-		void OnApplicationQuit()
+		void OnDestroy()
+		{
+			Cleanup();
+		}
+
+		void Cleanup()
 		{
 			StopCoroutine(OnProcessRecvPacketsTick());
 
@@ -965,28 +928,32 @@ namespace Positron
 					receiveThread.Abort();
 				}
 			}
+			receiveThread = null;
 
 			if( receiveClient != null )
 			{
 				receiveClient.Close();
 			}
-		}
+			receiveClient = null;
 
-		void OnDestroy()
-		{
-			StopCoroutine(OnProcessRecvPacketsTick());
-
-			if( receiveThread != null )
+			if( _instance == this )
 			{
-				receiveThread.Abort();
+				_instance = null;
+
+				OnPlayStateChange = null;
+				OnPlay = null;
+				OnPaused = null;
+				OnStopped = null;
+				OnRecenter = null;
+				OnMuteToggle = null;
+				OnFastForward = null;
+				OnRewind = null;
+				OnMotionProfileChange = null;
+
+				_isInitialized = false;
 			}
 
-			if( receiveClient != null )
-			{
-				receiveClient.Close();
-			}
-
-			_instance = null;
+			lastRecvDevicePacket = null;
 		}
 	}
 }

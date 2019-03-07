@@ -9,47 +9,34 @@ namespace Positron
 		[ SerializeField ]
 		private string _profileName = null;
 
-		public string profileName
+		public string ProfileName
 		{
-			get
-			{
-				return _profileName;
-			}
+			get{ return _profileName; }
 			set
 			{
 				_profileName = value;
 
 				if( !string.IsNullOrEmpty(_profileName)
-				&& Application.isPlaying
-				&& VoyagerDevice.MotionProfile != _profileName
-				&& VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop ) {
-					VoyagerDevice.SetMotionProfile(_profileName);
-					// Interface.Play();
+					&& Application.isPlaying
+					&& VoyagerDevice.MotionProfile != _profileName
+					&& VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
+				{
+					// This has been made redundant by TimelineControl Track setup.
+					// VoyagerDevice.SetMotionProfile( _profileName );
 				}
-
-				/*else if (string.IsNullOrEmpty(_profileName)
-				 * && Application.isPlaying
-				 * && Interface.currentMotionProfile != _profileName
-				 * && Interface.state != Interface.State.Pause) {
-				 *  Interface.Pause();
-				 * }*/
 			}
 		}
 
-        void Start() {
-            if (!string.IsNullOrEmpty(_profileName)
-			&& Application.isPlaying
-			&& VoyagerDevice.MotionProfile != _profileName
-			&& VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop) {
-                VoyagerDevice.SetMotionProfile(_profileName);
-            }
-        }
-
-
-        /*void Update() {
-			if (!VoyagerDevice.IsUpdated && VoyagerDevice.IsInitialized) {
-				VoyagerDevice.SendData();
+		void Start()
+		{
+			if( !string.IsNullOrEmpty(_profileName)
+				&& Application.isPlaying
+				&& VoyagerDevice.MotionProfile != _profileName
+				&& VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
+			{
+				// This has been made redundant by TimelineControl Track setup.
+				// VoyagerDevice.SetMotionProfile( _profileName );
 			}
-		}*/
+		}
 	}
 }

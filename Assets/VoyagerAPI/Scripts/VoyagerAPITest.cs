@@ -15,8 +15,8 @@ namespace Positron
 		public Text deviceDataText;
 		public Text lastRecvDataText;
 
-		// Simulated video/content playhead time, not using timescale since gazeui uses game time.
-		private float playheadTime = 0.0f;
+		// Simulated video/experience play head time.
+		private float experienceTime = 0.0f;
 
 		public void ToggleMute()
 		{
@@ -50,14 +50,10 @@ namespace Positron
 
 		void Awake()
 		{
-			// Add the Interface to this object so it doesn't get destroyed on load
-			if( GetComponent<VoyagerDevice>() == null )
-			{
-				gameObject.AddComponent<VoyagerDevice>();
-			}
+			DontDestroyOnLoad( this );
 
-			if( XRDevice.isPresent
-				&& XRSettings.enabled )
+			// Init HMD
+			if( XRDevice.isPresent && XRSettings.enabled )
 			{
 				XRDevice.SetTrackingSpaceType(TrackingSpaceType.Stationary);
 
@@ -65,13 +61,14 @@ namespace Positron
 			}
 		}
 
-		// Use this for initialization
 		IEnumerator Start()
 		{
 			// Make sure we have an instance of the Positron interface before we do anything else
-			while( VoyagerDevice.Instance == null )
+			var voyagerDevice = VoyagerDevice.Instance;
+			if( voyagerDevice == null )
 			{
-				yield return null;
+				Debug.LogError("Failed to create VoyagerDevice Singleton.");
+				yield break;
 			}
 
 			// Load config from file
@@ -87,12 +84,20 @@ namespace Positron
 				yield break;
 			}
 
-			// Set the Positron Interface content here so it is only receiving data for this application
+			// Set the Content Params.
 			VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
 
-			VoyagerDevice.LoadContent("file:///C:/Test/Test.mp4");
+			// Experience should start in Paused state.
 			VoyagerDevice.Pause();
+
+			// Set the Content ID.
+			VoyagerDevice.LoadContent("file:///C:/Test/Test.mp4");
+
+			// Notify PSM that loading is complete.
 			VoyagerDevice.Loaded(true);
+
+			// Set the initial Motion Profile track name.
+			VoyagerDevice.SetMotionProfile( "TestProfile" );
 
 			configText.text = VoyagerDevice.Config.ToString();
 		}
@@ -110,20 +115,67 @@ namespace Positron
 				Recenter();
 			}
 
-			if( VoyagerDevice.PlayState == VoyagerDevicePlayState.Play )
+			// ~===============================================
+			// Key Commands
+
+			if( Input.GetKeyDown( KeyCode.Space ))		// Play-Pause
 			{
-				playheadTime += Time.deltaTime;
-				VoyagerDevice.SendTimeSeconds(playheadTime);
-			}
-			else if( VoyagerDevice.PlayState == VoyagerDevicePlayState.Stop )
-			{
-				if( !Mathf.Approximately(playheadTime, 0.0f))
-				{
-					playheadTime = 0.0f;
-					VoyagerDevice.SendTimeSeconds(0.0f);
-				}
+				VoyagerDevice.PlayPause();
 			}
 
+			if( Input.GetKeyDown( KeyCode.R ))			// Recenter HMD
+			{
+				Recenter();
+			}
+
+			if( Input.GetKeyDown( KeyCode.RightArrow ))	// Skip ahead 10sec
+			{
+				experienceTime += 10f;
+			}
+
+			if( Input.GetKeyDown( KeyCode.LeftArrow ))	// Skip back 10sec
+			{
+				experienceTime = Mathf.Max( 0f, experienceTime - 10f );
+			}
+
+			if( Input.GetKeyDown( KeyCode.UpArrow ))	// Skip ahead 30sec
+			{
+				experienceTime += 30f;
+			}
+
+			if( Input.GetKeyDown( KeyCode.DownArrow ))	// Skip back 30sec
+			{
+				experienceTime = Mathf.Max( 0f, experienceTime - 30f );
+			}
+
+			// ~===============================================
+			// Send Experience Time to PSM.
+
+			switch( VoyagerDevice.PlayState )
+			{
+				case VoyagerDevicePlayState.Play:
+				{
+					experienceTime += Time.deltaTime;
+					VoyagerDevice.SendTimeSeconds(experienceTime);
+					break;
+				}
+
+				case VoyagerDevicePlayState.Pause:
+				{
+					VoyagerDevice.SendTimeSeconds(experienceTime);
+					break;
+				}
+
+				case VoyagerDevicePlayState.Stop:
+				{
+					if( !Mathf.Approximately(experienceTime, 0.0f))
+					{
+						experienceTime = 0.0f;
+						VoyagerDevice.SendTimeSeconds(0.0f);
+					}
+					break;
+				}
+			}
 
 			string deviceStateStr;
 			string lastRecvDataStr;

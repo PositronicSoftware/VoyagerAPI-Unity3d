@@ -8,32 +8,22 @@ namespace Positron
 {
 	/* This class is used to initialize the Voyager Interface
 	 * and execute the commands from the Voyager Interface*/
-
 	public class VoyagerManager : MonoBehaviour
 	{
+		public TimelineControl timelineControl;
+
+		// Path for this application's executable
+		[ SerializeField ]
+		private string path;
+
 		// Return timeScale to previous saved value since we are overriding it
 		private float previousTimeScale = 1f;
 
-		// Path for this application's executable
-		[SerializeField] private string path;
-
-		// Bool to check to see if audio is muted
-		private bool _mute = false;
+		// Simulated video/experience play head time.
+		private float experienceTime = 0.0f;
 
 		// Screen fading script
 		private ScreenFader screenFader;
-
-		// Use this to check to see if the Interface has been initialized
-		private bool initializedInterface = false;
-
-		// Fade out the screen
-		public void ScreenFadeOut()
-		{
-			if( screenFader != null )
-			{
-				screenFader.fadeIn = false;
-			}
-		}
 
 		// Fade in the screen
 		public void ScreenFadeIn()
@@ -44,109 +34,104 @@ namespace Positron
 			}
 		}
 
-		// Mute the audio
-		public void Mute(bool mute)
+		// Fade out the screen
+		public void ScreenFadeOut()
 		{
-			_mute = mute;
-			if( _mute )
+			if( screenFader != null )
 			{
-				AudioListener.volume = 0f;
+				screenFader.fadeIn = false;
+			}
+		}
+
+		public void SetFullScreen()
+		{
+			if( !Screen.fullScreen )
+			{
+				Screen.SetResolution(Screen.currentResolution.width, Screen.currentResolution.height, true);
 			}
 			else
 			{
-				AudioListener.volume = 1f;
+				Screen.SetResolution(1024, 768, false);
 			}
-			// Debug.Log("VoyagerManager Mute " + _mute);
+		}
+
+		// Mute audio
+		public void Mute(bool muteOn)
+		{
+			if( VoyagerDevice.IsMuted != muteOn )
+			{
+				VoyagerDevice.ToggleMute();
+			}
+		}
+
+		public void ToggleMute()
+		{
+			VoyagerDevice.ToggleMute();
 		}
 
 		// Recenter the HMD
 		public void Recenter()
 		{
-			if( UnityEngine.XR.XRDevice.isPresent )
-			{
-				UnityEngine.XR.InputTracking.Recenter();
-				// Debug.Log("HMD Recentered.");
-			}
+			VoyagerDevice.Recenter();
 		}
 
-		// Toggle between play and pause
 		public void PlayPause()
 		{
 			VoyagerDevice.PlayPause();
-			if( VoyagerDevice.IsPaused )
-			{
-				if( Time.timeScale != 0f )
-				{
-                   
-					previousTimeScale = Time.timeScale;
-				}
+		}
 
-				Time.timeScale = 0f;
-			}
-			else
+		public void Play()
+		{
+			if( VoyagerDevice.PlayState == VoyagerDevicePlayState.Pause )
 			{
-				Time.timeScale = previousTimeScale;
+				VoyagerDevice.PlayPause();
 			}
 		}
 
-		// Screen fade out if it is available and quit the application
-		IEnumerator QuitApp()
+		public void Pause()
 		{
-			Time.timeScale = 1f;
-			if( screenFader != null )
+			if( VoyagerDevice.PlayState == VoyagerDevicePlayState.Play )
 			{
-				yield return new WaitForSeconds(screenFader.fadeTime);
+				VoyagerDevice.PlayPause();
 			}
-
-			VoyagerDevice.Stop();
-			Application.Quit();
 		}
 
-		// Exit the application
-		public void ExitApp()
+		public void SeekForward10()
 		{
-			ScreenFadeOut();
-
-			StartCoroutine(QuitApp());
+			experienceTime += 10;
 		}
 
-		string LoadTextFile(string fileName)
+		public void SeekBack10()
 		{
-			string t = "";
-			string line = "-";
-			try
+			experienceTime = Mathf.Max( 0f, experienceTime - 10f );
+		}
+
+		public void SeekForward30()
+		{
+			experienceTime += 30;
+
+			if( timelineControl )
 			{
-				StreamReader sr = new StreamReader(Application.streamingAssetsPath + "/" + fileName + ".txt");
-				line = sr.ReadLine();
-				while( line != null )
-				{
-					t += line;
-					line = sr.ReadLine();
-					if( line != null )
-					{
-						t += "\n";
-					}
-				}
-				sr.Close();
-				// Debug.Log(t);
 			}
-			catch( System.Exception e )
+		}
+
+		public void SeekBack30()
+		{
+			experienceTime = Mathf.Max( 0f, experienceTime - 30f );
+
+			if( timelineControl )
 			{
-				print("Error: " + Application.streamingAssetsPath + "/" + fileName);
 			}
-			return t;
 		}
 
 		void Awake()
 		{
-			// Add the Interface to this object so it doesn't get destroyed on load
-			if( GetComponent<VoyagerDevice>() == null )
-			{
-				gameObject.AddComponent<VoyagerDevice>();
-			}
+			DontDestroyOnLoad( this );
 
-			if( UnityEngine.XR.XRDevice.isPresent
-				&& UnityEngine.XR.XRSettings.enabled )
+			timelineControl = GetComponent<TimelineControl>();
+
+			// Init HMD
+			if( UnityEngine.XR.XRDevice.isPresent && UnityEngine.XR.XRSettings.enabled )
 			{
 				UnityEngine.XR.XRDevice.SetTrackingSpaceType(UnityEngine.XR.TrackingSpaceType.Stationary);
 
@@ -154,13 +139,19 @@ namespace Positron
 			}
 		}
 
-		// Use this for initialization
 		IEnumerator Start()
 		{
-			// Make sure we have an instance of the Positron interface before we do anything else
-			while( VoyagerDevice.Instance == null )
+			screenFader = FindObjectOfType<ScreenFader>();
+
+			// ~===============================================
+			// Initialize Voyager API
+
+			// Make sure we have an instance of the Positron interface before we do anything else.
+			var voyagerDevice = VoyagerDevice.Instance;
+			if( voyagerDevice == null )
 			{
-				yield return null;
+				Debug.LogError("Failed to create VoyagerDevice Singleton.");
+				yield break;
 			}
 
 			// Load config from file
@@ -176,47 +167,123 @@ namespace Positron
 				yield break;
 			}
 
-			// Set the Positron Interface content here so it is only receiving data for this application
+			// Set the Content Params.
 			VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
 
-            #if !UNITY_EDITOR
-            // Set the path to this executable so Voyager knows what application is playing
-            path = System.IO.Directory.GetParent(Application.dataPath).FullName;
+			// Experience should start in Paused state.
+			VoyagerDevice.Pause();
+
+#if !UNITY_EDITOR
+			// Set the path to this executable so Voyager knows what application is playing
+			path = System.IO.Directory.GetParent(Application.dataPath).FullName;
 			string[] executables = System.IO.Directory.GetFiles(path, "*.exe");
 
+			// Load the content if there is an executable
 			if( executables != null && executables.Length > 0 )
 			{
-				// Load the content if there is an executable
 				VoyagerDevice.LoadContent(executables[ 0 ]);
-				VoyagerDevice.Idle();
-				VoyagerDevice.Loaded(true);
 			}
 			else
 			{
-				Debug.Log("No executable found at " + path);
+				Debug.LogError("No executable found at " + path);
+				yield break;
 			}
-            #else
-            VoyagerDevice.LoadContent(path);
-			VoyagerDevice.Idle();
-            VoyagerDevice.Loaded(true);
-            #endif
+#else
+			// Set the Content ID.
+			VoyagerDevice.LoadContent(path);
+#endif
 
-            screenFader = FindObjectOfType<ScreenFader>();
+			// Notify PSM that loading is complete.
+			VoyagerDevice.Loaded(true);
 
-			// Start playing motion in Voyager - Positron Interface call to start motion //
-			// Interface.MotionProfile("Voyager Demo Start Motion Profile");
-			// VoyagerDevice.Pause();
+			// Set the initial Motion Profile track name.
+			if( timelineControl != null && timelineControl.HasTrackSetups )
+			{
+				var currDef = timelineControl.CurrentTrackDefinition;
+				VoyagerDevice.SetMotionProfile( currDef.motionProfile );
+			}
+			else
+			{
+				VoyagerDevice.SetMotionProfile( "TestProfile" );
+			}
 
-			initializedInterface = true;
+			// ~===============================================
+			// Bind Events
 
-			// Any other game related code to start the game can go after Voyager is initialized
+			VoyagerDevice.OnPlayStateChange += OnVoyagerPlayStateChange;
+			VoyagerDevice.OnPlay += OnVoyagerPlay;
+			VoyagerDevice.OnPaused += OnVoyagerPaused;
+			VoyagerDevice.OnStopped += OnVoyagerStopped;
+			VoyagerDevice.OnMuteToggle += OnVoyagerToggleMute;
+			VoyagerDevice.OnRecenter += OnVoyagerRecenterHMD;
 		}
 
-		// Update is called once per frame
+		void OnVoyagerPlayStateChange( VoyagerDevicePlayState InState )
+		{
+			switch( InState )
+			{
+				case VoyagerDevicePlayState.Play:
+				{
+					Time.timeScale = previousTimeScale;
+
+					AudioListener.volume = 1f;
+
+					break;
+				}
+
+				case VoyagerDevicePlayState.Pause:
+				{
+					if( Time.timeScale != 0f )
+					{
+						previousTimeScale = Time.timeScale;
+					}
+
+					Time.timeScale = 0f;
+
+					AudioListener.volume = 0f;
+
+					break;
+				}
+
+				case VoyagerDevicePlayState.Stop:
+				{
+					Time.timeScale = previousTimeScale;
+
+					ExitApp();
+
+					break;
+				}
+			}
+		}
+
+		void OnVoyagerPlay()
+		{
+			// React to Play state event.
+		}
+
+		void OnVoyagerPaused()
+		{
+			// React to Paused state event.
+		}
+
+		void OnVoyagerStopped()
+		{
+			// React to Stop state event.
+		}
+
+		void OnVoyagerToggleMute( bool InValue )
+		{
+			AudioListener.volume = InValue ? 0f : 1f;
+		}
+
+		void OnVoyagerRecenterHMD()
+		{
+			VoyagerDevice.Recenter();
+		}
+
 		void Update()
 		{
-			// Make sure we have an instance of the Positron interface before we do anything else
-			if( VoyagerDevice.Instance == null )
+			if( VoyagerDevice.Instance == null || !VoyagerDevice.IsInitialized )
 			{
 				return;
 			}
@@ -227,56 +294,99 @@ namespace Positron
 				Recenter();
 			}
 
-			// If we have the Interface and it has been updated and initialized then run commands from it
-			if( VoyagerDevice.Instance != null && VoyagerDevice.IsUpdated && VoyagerDevice.IsInitialized )
+			// ~===============================================
+			// Key Commands
+
+			if( Input.GetKeyDown( KeyCode.Space ))		// Play-Pause
 			{
-				// Play the content here on Interface Play state
-				if( VoyagerDevice.PlayState == VoyagerDevicePlayState.Play )
-				{
-					if( Time.timeScale == 0f )
-					{
-						Time.timeScale = previousTimeScale;
-					}
-				}
-				// Pause the content here on Interface Pause state
-				else if( VoyagerDevice.PlayState == VoyagerDevicePlayState.Pause )
-				{
-					if( Time.timeScale != 0f )
-					{
-						previousTimeScale = Time.timeScale;
-					}
-
-					Time.timeScale = 0f;
-
-					if( !VoyagerDevice.IsMuted )
-					{
-						VoyagerDevice.ToggleMute();
-					}
-
-					Mute(true);
-				}
-				// Quit the content on Interface Stop state
-				else if( VoyagerDevice.PlayState == VoyagerDevicePlayState.Stop )
-				{
-					ExitApp();
-				}
-
-				// Mute the sound if the Interface is set to Mute
-				Mute(VoyagerDevice.IsMuted);
+				VoyagerDevice.PlayPause();
 			}
 
-			/* On use this next part if not using Motion Profiles with Timeline
-			 * // If the Interface is initialized then start sending time
-			 * // to go with the motion profiles
-			 * if (initializedInterface) {
-			 *  Interface.SendTime();
-			 *  // Debug.Log("Sending time");
-			 * }
-			 * // Send the data to the Interface otherwise to set it up
-			 * else {
-			 *  Interface.SendData();
-			 *  // Debug.Log("Sending Data");
-			 * }*/
+			if( Input.GetKeyDown( KeyCode.R ))			// Recenter HMD
+			{
+				Recenter();
+			}
+
+			if( Input.GetKeyDown( KeyCode.RightArrow ))	// Skip ahead 10sec
+			{
+				experienceTime += 10f;
+			}
+
+			if( Input.GetKeyDown( KeyCode.LeftArrow ))	// Skip back 10sec
+			{
+				experienceTime = Mathf.Max( 0f, experienceTime - 10f );
+			}
+
+			if( Input.GetKeyDown( KeyCode.UpArrow ))	// Skip ahead 30sec
+			{
+				experienceTime += 30f;
+			}
+
+			if( Input.GetKeyDown( KeyCode.DownArrow ))	// Skip back 30sec
+			{
+				experienceTime = Mathf.Max( 0f, experienceTime - 30f );
+			}
+
+			// ~===============================================
+			// Send Experience Time to PSM.
+
+			// If not using Motion Profiles with Timeline, we must send Time to PSM.
+			if( timelineControl == null )
+			{
+				switch( VoyagerDevice.PlayState )
+				{
+					case VoyagerDevicePlayState.Play:
+					{
+						experienceTime += Time.deltaTime;
+						VoyagerDevice.SendTimeSeconds(experienceTime);
+						break;
+					}
+
+					case VoyagerDevicePlayState.Pause:
+					{
+						VoyagerDevice.SendTimeSeconds(experienceTime);
+						break;
+					}
+
+					case VoyagerDevicePlayState.Stop:
+					{
+						if( !Mathf.Approximately(experienceTime, 0.0f))
+						{
+							experienceTime = 0.0f;
+							VoyagerDevice.SendTimeSeconds(0.0f);
+						}
+						break;
+					}
+				}
+			}
+			else
+			{
+				experienceTime = timelineControl.GetTime();
+				VoyagerDevice.SendTimeSeconds(experienceTime);
+			}
+		}
+
+		// Exit the application
+		public void ExitApp()
+		{
+			VoyagerDevice.Stop();
+
+			ScreenFadeOut();
+
+			StartCoroutine(DoQuitApp());
+		}
+
+		// Screen fade out if it is available and quit the application
+		IEnumerator DoQuitApp()
+		{
+			Time.timeScale = 1f;
+			if( screenFader != null )
+			{
+				yield return new WaitForSeconds(screenFader.fadeTime);
+			}
+
+			Debug.Log( "~ APP QUIT ~" );
+			Application.Quit();
 		}
 	}
 }
