@@ -14,7 +14,7 @@ namespace Positron
 {
 	public static class VoyagerDefaults
 	{
-		public const string apiVersion = "1.0.0";
+		public const string apiVersion = "1.1.0";
 
 		// Connection defaults
 		public const string localHostIP = "127.0.0.1";
