@@ -14,7 +14,7 @@ namespace Positron
 {
 	public static class VoyagerDefaults
 	{
-		public const string apiVersion = "1.1.0";
+		public const string apiVersion = "1.1.1";
 
 		// Connection defaults
 		public const string localHostIP = "127.0.0.1";
@@ -636,20 +636,10 @@ namespace Positron
 		{
 			if( IsInitialized )
 			{
-				bool prevState = _isRecentering;
 				_isRecentering = true;
-				if( prevState != true )
+				if( OnRecenter != null )
 				{
-					if( UnityEngine.XR.XRDevice.isPresent )
-					{
-						UnityEngine.XR.XRDevice.SetTrackingSpaceType(UnityEngine.XR.TrackingSpaceType.Stationary);
-
-						UnityEngine.XR.InputTracking.Recenter();
-					}
-					if( OnRecenter != null )
-					{
-						OnRecenter();
-					}
+					OnRecenter();
 				}
 
 				deviceState.@event.recenter = true;

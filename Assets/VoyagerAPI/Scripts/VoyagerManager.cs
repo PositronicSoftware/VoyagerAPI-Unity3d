@@ -10,6 +10,9 @@ namespace Positron
 	 * and execute the commands from the Voyager Interface*/
 	public class VoyagerManager : MonoBehaviour
 	{
+		[ Header("XR Space") ]
+		public UnityEngine.XR.TrackingSpaceType XRSpaceType = UnityEngine.XR.TrackingSpaceType.Stationary;
+
 		[ Header("Content Path") ]
 
 		// Path for this application's executable
@@ -226,8 +229,7 @@ namespace Positron
 			// Init HMD
 			if( UnityEngine.XR.XRDevice.isPresent && UnityEngine.XR.XRSettings.enabled )
 			{
-				UnityEngine.XR.XRDevice.SetTrackingSpaceType(UnityEngine.XR.TrackingSpaceType.Stationary);
-
+				UnityEngine.XR.XRDevice.SetTrackingSpaceType(XRSpaceType);
 				UnityEngine.XR.InputTracking.Recenter();
 			}
 		}
@@ -377,7 +379,18 @@ namespace Positron
 
 		void OnVoyagerRecenterHMD()
 		{
-			VoyagerDevice.Recenter();
+			if( UnityEngine.XR.XRDevice.isPresent )
+			{
+				if( UnityEngine.XR.XRSettings.enabled )
+				{
+					UnityEngine.XR.XRDevice.SetTrackingSpaceType( XRSpaceType );
+					UnityEngine.XR.InputTracking.Recenter();
+				}
+				else
+				{
+					Debug.LogWarning("Recieved OnVoyagerRecenterHMD() 'Recenter' callback when UnityEngine.XR is disabled.");
+				}
+			}
 		}
 
 		void Update()
