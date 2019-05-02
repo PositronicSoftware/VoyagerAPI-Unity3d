@@ -1,5 +1,7 @@
 # Voyager API Unity3d Tester & Source
 
+Please use the latest release when intergating in to your project > [Releases](https://github.com/PositronicSoftware/VoyagerAPI-Unity3d/releases).
+
 ---------------------------------------------------------------------------
 
 ## Key Classes
