@@ -26,12 +26,14 @@ namespace Positron
 	[ System.Serializable ]
 	public class VoyagerDevicePacketBody
 	{
-		public float pitch;	// --- pitch in radians
-		public float pitchVel;
+		public float pitchPosition;	// --- pitch in degrees
+		public float pitchSpeed;
 		public float pitchAccel;
-		public float yaw;	// --- yaw in radians
-		public float yawVel;
+		public float pitchDecel;
+		public float yawPosition;	// --- yaw in degrees
+		public float yawSpeed;
 		public float yawAccel;
+		public float yawDecel;
 	}
 
 	[ System.Serializable ]
@@ -39,7 +41,7 @@ namespace Positron
 	{
 		public string language = "English";
 		public bool library = false;
-		public string inputType = "None";
+		public int inputType = 0;
 		public int status = 0;				// --- playback state, integer possible values are : 0 (StoppedState), 1 (PlayingState), 2 (PausedState)
 		public bool playPause = false;
 		public bool stop = false;

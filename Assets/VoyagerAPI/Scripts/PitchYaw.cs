@@ -1,49 +1,50 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-namespace Positron {
-
-	public class PitchYaw : MonoBehaviour {
-		public Vector3 startPitch = Vector3.zero;
-		public Vector3 endPitch = Vector3.zero;
-
-		public Vector3 startYaw = Vector3.zero;
-		public Vector3 endYaw = Vector3.zero;
+namespace Positron
+{
+	public class PitchYaw : MonoBehaviour
+	{
+		public float startPitch = 0f;
+		public float endPitch = 0f;
+		public float startYaw = 0f;
+		public float endYaw = 0f;
 
 		[SerializeField]
-		private Vector3 _pitch = Vector3.zero;
-		public Vector3 pitch {
-			get {
-				return _pitch;
-			}
-			set {
+		private float _pitch = 0;
+		public float pitch
+		{
+			get {return _pitch;}
+			set
+			{
 				_pitch = value;
 
-				if (Application.isPlaying) { 
-					VoyagerDevice.Pitch(_pitch);
+				if (Application.isPlaying)
+				{ 
+					VoyagerDevice.SetPitch(_pitch);
 					VoyagerDevice.Play();
 				}
 			}
 		}
 
 		[SerializeField]
-		private Vector3 _yaw = Vector3.zero;
-		public Vector3 yaw {
-			get {
-				return _yaw;
-			}
-			set {
+		private float _yaw = 0;
+		public float yaw
+		{
+			get {return _yaw;}
+			set
+			{
 				_yaw = value;
 
-				if (Application.isPlaying) { 
-					VoyagerDevice.Yaw(_yaw);
+				if (Application.isPlaying)
+				{ 
+					VoyagerDevice.SetYaw(_yaw);
 					VoyagerDevice.Play();
 				}
 			}
 		}
 
-		void Update() {
+		void Update()
+		{
 			VoyagerDevice.SendTimeNow();
 		}
 	}

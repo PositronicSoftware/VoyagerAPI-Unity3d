@@ -28,6 +28,9 @@ namespace Positron
 	// Device Play State Id.
 	public enum VoyagerDevicePlayState { Stop, Play, Pause }
 
+	// Device Input type ( mode ).
+	public enum VoyagerDeviceInputType { Lite = 0, Heavy = 1, Hybrid = 2 }
+
 	public delegate void VoyagerEventDelegate();
 
 	public delegate void VoyagerPlayStateEventDelegate( VoyagerDevicePlayState InState );
@@ -109,11 +112,18 @@ namespace Positron
 		static public event VoyagerEventDelegate OnRewind;
 		static public event VoyagerMotionProfileEventDelegate OnMotionProfileChange;
 
-		// The current state used by the Interface.  State.Stop, State.Play, State.Pause
+		// The current state used by the Interface.
 		static public VoyagerDevicePlayState _playState = VoyagerDevicePlayState.Stop;
 		static public VoyagerDevicePlayState PlayState
 		{
 			get{ return _playState; }
+		}
+
+		// The current input type used by the Interface.
+		static public VoyagerDeviceInputType _inputType = VoyagerDeviceInputType.Lite;
+		static public VoyagerDeviceInputType InputType
+		{
+			get{ return _inputType; }
 		}
 
 		// Content object the Interface is currently using
@@ -536,14 +546,12 @@ namespace Positron
 			}
 		}
 
-		// Send pitch angle, velocity, acceleration to Voyager
-		static public void Pitch(Vector3 pitch)
+		// Set Pitch angle ( Degrees ).
+		static public void SetPitch(float pitch)
 		{
 			if( IsInitialized )
 			{
-				deviceState.body.pitch = pitch.x;	// --- pitch in radians
-				deviceState.body.pitchVel = pitch.y;
-				deviceState.body.pitchAccel = pitch.z;
+				deviceState.body.pitchPosition = pitch;
 
 				SendData();
 			}
@@ -553,14 +561,49 @@ namespace Positron
 			}
 		}
 
-		// Send yaw angle, velocity, acceleration to Voyager
-		static public void Yaw(Vector3 yaw)
+		// Set Pitch angle ( Degrees ) and params of speed, acceleration and deceleration.
+		static public void SetPitchParams(float pitch, float speed, float accel, float decel)
 		{
 			if( IsInitialized )
 			{
-				deviceState.body.yaw = yaw.x;	// --- yaw in radians
-				deviceState.body.yawVel = yaw.y;
-				deviceState.body.yawAccel = yaw.z;
+				deviceState.body.pitchPosition = pitch;
+				deviceState.body.pitchSpeed = speed;
+				deviceState.body.pitchAccel = accel;
+				deviceState.body.pitchAccel = accel;
+				deviceState.body.pitchDecel = decel;
+
+				SendData();
+			}
+			else
+			{
+				Debug.LogError("DeviceInterface is NOT initialized; Call Init( VoyagerDeviceConfig ) first!");
+			}
+		}
+
+		// Set Yaw angle ( Degrees ).
+		static public void SetYaw(float yaw)
+		{
+			if( IsInitialized )
+			{
+				deviceState.body.yawPosition = yaw;
+
+				SendData();
+			}
+			else
+			{
+				Debug.LogError("DeviceInterface is NOT initialized; Call Init( VoyagerDeviceConfig ) first!");
+			}
+		}
+
+		// Set Yaw angle ( Degrees ) and params of speed, acceleration and deceleration.
+		static public void SetYawParams(float yaw, float speed, float accel, float decel)
+		{
+			if( IsInitialized )
+			{
+				deviceState.body.yawPosition = yaw;
+				deviceState.body.yawSpeed = speed;
+				deviceState.body.yawAccel = accel;
+				deviceState.body.yawDecel = decel;
 
 				SendData();
 			}
@@ -707,6 +750,24 @@ namespace Positron
 			deviceState.content.ver = _content.ver;
 
 			Debug.Log("VoyagerDevice >> | command | 'Set Content' " + "|" + type + "|" + platform + "|" + contentName + "|" + version + "|");
+		}
+
+		// Sets the InputType expected by Voyager.
+		static public void SetInputType(VoyagerDeviceInputType inputType)
+		{
+			if( IsInitialized )
+			{
+				_inputType = inputType;
+
+				deviceState.@event.inputType = (int)_inputType;
+				SendData();
+
+				Debug.Log("VoyagerDevice >> | command | 'Set InputType' " + _inputType);
+			}
+			else
+			{
+				Debug.LogError("DeviceInterface is NOT initialized; Call Init( VoyagerDeviceConfig ) first!");
+			}
 		}
 
 		// Sets the motion profile for Voyager and initializes motion profile time.

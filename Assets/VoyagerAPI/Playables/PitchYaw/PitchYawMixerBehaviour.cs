@@ -14,16 +14,16 @@ public class PitchYawMixerBehaviour : PlayableBehaviour
         if(trackBinding == null)
             return;
 
-        Vector3 defaultPitch = trackBinding.startPitch;
-        Vector3 defaultYaw = trackBinding.startYaw;
+        float defaultPitch = trackBinding.startPitch;
+		float defaultYaw = trackBinding.startYaw;
 
         int inputCount = playable.GetInputCount ();
 
         float pitchTotalWeight = 0f;
         float yawTotalWeight = 0f;
 
-        Vector3 blendedPitch = Vector3.zero;
-        Vector3 blendedYaw = Vector3.zero;
+		float blendedPitch = 0f;
+		float blendedYaw = 0f;
 
         for (int i = 0; i < inputCount; i++)
         {
@@ -46,14 +46,14 @@ public class PitchYawMixerBehaviour : PlayableBehaviour
             {
                 pitchTotalWeight += inputWeight;
 
-                blendedPitch += Vector3.Lerp(input.startPitch, input.endPitch, tweenProgress) * inputWeight;
+                blendedPitch += Mathf.Lerp(input.startPitch, input.endPitch, tweenProgress) * inputWeight;
             }
 
             if (input.tweenYaw)
             {
                 yawTotalWeight += inputWeight;
 
-                blendedYaw += Vector3.Lerp(input.startYaw, input.endYaw, tweenProgress) * inputWeight;
+                blendedYaw += Mathf.Lerp(input.startYaw, input.endYaw, tweenProgress) * inputWeight;
             }
         }
 

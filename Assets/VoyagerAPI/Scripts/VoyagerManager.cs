@@ -19,6 +19,15 @@ namespace Positron
 		[ SerializeField ]
 		private string path = "C:/ExecutableName.exe";
 
+		[ Header("Input") ]
+
+		public float pitch = 0f;
+		public float pitchAccel = 10f;
+		public float pitchDecel = 5f;
+		public float yaw = 0f;
+		public float yawAccel = 10f;
+		public float yawDecel = 5f;
+
 		[ Header("Timeline") ]
 
 		public TimelineControl timelineControl = null;
@@ -114,6 +123,34 @@ namespace Positron
 			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
 				VoyagerDevice.Pause();
+			}
+		}
+
+		public void PitchDown5()
+		{
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
+			{
+				pitch -= 5;
+
+				VoyagerDevice.SetPitch( pitch );
+			}
+		}
+
+		public void PitchUp5()
+		{
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
+			{
+				pitch += 5;
+
+				VoyagerDevice.SetPitch(pitch);
+			}
+		}
+
+		public void CycleInputType()
+		{
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
+			{
+				VoyagerDevice.SetInputType((VoyagerDeviceInputType)(((int)VoyagerDevice.InputType + 1) % 3));
 			}
 		}
 

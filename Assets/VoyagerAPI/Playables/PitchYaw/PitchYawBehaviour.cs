@@ -15,10 +15,10 @@ public class PitchYawBehaviour : PlayableBehaviour
         Custom,
     }
 
-    public Vector3 startPitch;
-    public Vector3 endPitch;
-    public Vector3 startYaw;
-    public Vector3 endYaw;
+    public float startPitch;
+    public float endPitch;
+    public float startYaw;
+    public float endYaw;
     public bool tweenPitch = true;
     public bool tweenYaw = true;
     public TweenType tweenType;
