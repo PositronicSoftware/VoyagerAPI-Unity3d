@@ -3,6 +3,7 @@
 using System.Collections;
 using System.IO;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Positron
 {
@@ -27,6 +28,9 @@ namespace Positron
 		public float yaw = 0f;
 		public float yawAccel = 10f;
 		public float yawDecel = 5f;
+		public Text inputTypeLabel;
+		public Text pitchLabel;
+		public Text yawLabel;
 
 		[ Header("Timeline") ]
 
@@ -126,23 +130,53 @@ namespace Positron
 			}
 		}
 
+		public void PitchUp5()
+		{
+			PitchTo(pitch + 5);
+		}
+
 		public void PitchDown5()
+		{
+			PitchTo( pitch - 5 );
+		}
+
+		public void PitchTo(float pitchDegrees)
 		{
 			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
-				pitch -= 5;
+				pitch = pitchDegrees;
 
-				VoyagerDevice.SetPitch( pitch );
+				VoyagerDevice.SetPitch(pitch);
+			}
+
+			if( pitchLabel )
+			{
+				pitchLabel.text = pitch.ToString("F1");
 			}
 		}
 
-		public void PitchUp5()
+		public void YawRight10()
+		{
+			YawTo(yaw + 10);
+		}
+
+		public void YawLeft10()
+		{
+			YawTo( yaw - 10 );
+		}
+
+		public void YawTo( float yawDegrees )
 		{
 			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
-				pitch += 5;
+				yaw = yawDegrees;
 
-				VoyagerDevice.SetPitch(pitch);
+				VoyagerDevice.SetYaw(yaw);
+			}
+
+			if( yawLabel )
+			{
+				yawLabel.text = yaw.ToString("F1");
 			}
 		}
 
@@ -151,6 +185,11 @@ namespace Positron
 			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
 				VoyagerDevice.SetInputType((VoyagerDeviceInputType)(((int)VoyagerDevice.InputType + 1) % 3));
+			}
+
+			if( inputTypeLabel )
+			{
+				inputTypeLabel.text = VoyagerDevice.InputType.ToString().ToUpper();
 			}
 		}
 
@@ -348,6 +387,22 @@ namespace Positron
 			VoyagerDevice.OnStopped += OnVoyagerStopped;
 			VoyagerDevice.OnMuteToggle += OnVoyagerToggleMute;
 			VoyagerDevice.OnRecenter += OnVoyagerRecenterHMD;
+
+			// ~===============================================
+			// Update UI
+
+			if( inputTypeLabel )
+			{
+				inputTypeLabel.text = VoyagerDevice.InputType.ToString().ToUpper();
+			}
+			if( pitchLabel )
+			{
+				pitchLabel.text = pitch.ToString("F1");
+			}
+			if( yawLabel )
+			{
+				yawLabel.text = yaw.ToString("F1");
+			}
 		}
 
 		void OnVoyagerPlayStateChange( VoyagerDevicePlayState InState )
@@ -495,6 +550,30 @@ namespace Positron
 			if( Input.GetKeyDown( KeyCode.DownArrow ))	// Skip back 30sec
 			{
 				SeekBack30();
+			}
+
+			if( Input.GetKey(KeyCode.Comma))	// Pitch or Yaw
+			{
+				if( Input.GetKey(KeyCode.LeftShift))// Pitch
+				{
+					PitchTo( pitch + (8f * Time.deltaTime));
+				}
+				else
+				{
+					YawTo(yaw - (16f * Time.deltaTime));
+				}
+			}
+
+			if( Input.GetKey(KeyCode.Period))	// Pitch or Yaw
+			{
+				if( Input.GetKey(KeyCode.LeftShift))// Pitch
+				{
+					PitchTo( pitch - (8f * Time.deltaTime));
+				}
+				else
+				{
+					YawTo(yaw + (16f * Time.deltaTime));
+				}
 			}
 
 			// ~===============================================
