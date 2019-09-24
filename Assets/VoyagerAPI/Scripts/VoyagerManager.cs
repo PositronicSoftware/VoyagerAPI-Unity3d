@@ -560,7 +560,7 @@ namespace Positron
 				}
 				else
 				{
-					YawTo(yaw - (16f * Time.deltaTime));
+					YawTo(yaw - (24f * Time.deltaTime));
 				}
 			}
 
@@ -572,7 +572,7 @@ namespace Positron
 				}
 				else
 				{
-					YawTo(yaw + (16f * Time.deltaTime));
+					YawTo(yaw + (24f * Time.deltaTime));
 				}
 			}
 
