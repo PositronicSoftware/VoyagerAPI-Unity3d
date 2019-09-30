@@ -43,6 +43,11 @@ namespace Positron
 			VoyagerDevice.PlayPause();
 		}
 
+		public void Idle()
+		{
+			VoyagerDevice.Idle();
+		}
+
 		public void Stop()
 		{
 			VoyagerDevice.Stop();

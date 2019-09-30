@@ -3,15 +3,22 @@
 using System.Collections;
 using System.IO;
 using UnityEngine;
+using UnityEngine.XR;
 
 namespace Positron
 {
+	public enum VoyagerMangerStartMode { StartPaused, StartIdle }
+
 	/* This class is used to initialize the Voyager Interface
 	 * and execute the commands from the Voyager Interface*/
 	public class VoyagerManager : MonoBehaviour
 	{
-		[ Header("XR Space") ]
-		public UnityEngine.XR.TrackingSpaceType XRSpaceType = UnityEngine.XR.TrackingSpaceType.Stationary;
+		[ Header("Initialization") ]
+
+		// State to initialize the Voyager API in.
+		public VoyagerMangerStartMode startMode = VoyagerMangerStartMode.StartPaused;
+
+		public TrackingSpaceType XRSpace = TrackingSpaceType.Stationary;
 
 		[ Header("Content Path") ]
 
@@ -114,6 +121,14 @@ namespace Positron
 			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
 				VoyagerDevice.Pause();
+			}
+		}
+
+		public void Idle()
+		{
+			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Idle )
+			{
+				VoyagerDevice.Idle();
 			}
 		}
 
@@ -227,10 +242,10 @@ namespace Positron
 			}
 
 			// Init HMD
-			if( UnityEngine.XR.XRDevice.isPresent && UnityEngine.XR.XRSettings.enabled )
+			if( XRDevice.isPresent && XRSettings.enabled )
 			{
-				UnityEngine.XR.XRDevice.SetTrackingSpaceType(XRSpaceType);
-				UnityEngine.XR.InputTracking.Recenter();
+				XRDevice.SetTrackingSpaceType(XRSpace);
+				InputTracking.Recenter();
 			}
 		}
 
@@ -265,8 +280,27 @@ namespace Positron
 			// Set the Content Params.
 			VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
 
-			// Experience should start in Paused state.
-			VoyagerDevice.Pause();
+			// Set the Voyager start state.
+			switch( startMode )
+			{
+				case VoyagerMangerStartMode.StartIdle:
+				{
+					VoyagerDevice.Idle();
+					break;
+				}
+
+				case VoyagerMangerStartMode.StartPaused:
+				{
+					VoyagerDevice.Pause();
+					break;
+				}
+
+				default:
+				{
+					Debug.LogError( "Unhandled Start Mode " + startMode );
+					break;
+				}
+			}
 
 #if !UNITY_EDITOR
 			// Set the path to this executable so Voyager knows what application is playing
@@ -379,12 +413,12 @@ namespace Positron
 
 		void OnVoyagerRecenterHMD()
 		{
-			if( UnityEngine.XR.XRDevice.isPresent )
+			if( XRDevice.isPresent )
 			{
-				if( UnityEngine.XR.XRSettings.enabled )
+				if( XRSettings.enabled )
 				{
-					UnityEngine.XR.XRDevice.SetTrackingSpaceType( XRSpaceType );
-					UnityEngine.XR.InputTracking.Recenter();
+					XRDevice.SetTrackingSpaceType( XRSpace );
+					InputTracking.Recenter();
 				}
 				else
 				{

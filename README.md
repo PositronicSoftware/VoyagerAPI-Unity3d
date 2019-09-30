@@ -32,10 +32,11 @@ Now add the `VoyagerManager` and `TimelineControl` Components to this GameObject
 
 ![VoyagerManager Properties](Docs/VoyagerManagerProperties.png)
 
-1. `path` should be set to your build executable path `"C:/ExecutableName.exe"` in the inspector.
-2. `timelineControl` can be left null. It will be auto-set on Play if a TimelineControl component is detected.
-3. You can optimize the VoyagerManager SendTime() frequency on memory-constrained platforms by setting `optimizeSendTime = true` in the inspector.
-4. VoyagerManager will load your PSM connection settings from a JSON Config file: See [Device Settings Config](#device-settings-config).
+1. `Start Mode` allows you to initialize in the Voyager in different states based on project requirements.
+2. `Path` should be set to your build executable path `"C:/ExecutableName.exe"` in the inspector.
+3. `Timeline Control` can be left null. It will be auto-set on Play if a TimelineControl component is detected.
+4. You can optimize the VoyagerManager SendTime() frequency on memory-constrained platforms by setting `optimizeSendTime = true` in the inspector.
+5. VoyagerManager will load your PSM connection settings from a JSON Config file: See [Device Settings Config](#device-settings-config).
 
 VoyagerManager implements the following Keyboard commands for us to easily create Motion data and test your experience.
 

@@ -14,7 +14,7 @@ namespace Positron
 {
 	public static class VoyagerDefaults
 	{
-		public const string apiVersion = "1.1.1";
+		public const string apiVersion = "1.2.1";
 
 		// Connection defaults
 		public const string localHostIP = "127.0.0.1";
@@ -26,7 +26,7 @@ namespace Positron
 	}
 
 	// Device Play State Id.
-	public enum VoyagerDevicePlayState { Stop, Play, Pause }
+	public enum VoyagerDevicePlayState { Stop = 0, Play = 1, Pause = 2, Idle = 3 }
 
 	public delegate void VoyagerEventDelegate();
 
@@ -400,6 +400,29 @@ namespace Positron
 				SendData();
 
 				Debug.Log("VoyagerDevice >> | command | 'Pause'");
+			}
+			else
+			{
+				Debug.LogError("DeviceInterface is NOT initialized; Call Init( VoyagerDeviceConfig ) first!");
+			}
+		}
+
+		// Set the Voyager to Idle state.
+		static public void Idle()
+		{
+			if( IsInitialized )
+			{
+				_isPaused = true;
+
+				var prevState = _playState;
+				_playState = VoyagerDevicePlayState.Idle;
+				NotifyStateChange(prevState);
+
+				deviceState.@event.status = (int)_playState;
+				deviceState.@event.playPause = false;
+				SendData();
+
+				Debug.Log("VoyagerDevice >> | command | 'Idle'");
 			}
 			else
 			{
