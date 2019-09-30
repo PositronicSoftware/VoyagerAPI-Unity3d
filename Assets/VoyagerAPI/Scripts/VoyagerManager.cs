@@ -23,9 +23,11 @@ namespace Positron
 		[ Header("Input") ]
 
 		public float pitch = 0f;
+		public float pitchSpeed = 10f;
 		public float pitchAccel = 10f;
 		public float pitchDecel = 5f;
 		public float yaw = 0f;
+		public float yawSpeed = 10f;
 		public float yawAccel = 10f;
 		public float yawDecel = 5f;
 		public Text inputTypeLabel;
@@ -184,7 +186,14 @@ namespace Positron
 		{
 			if( VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop )
 			{
-				VoyagerDevice.SetInputType((VoyagerDeviceInputType)(((int)VoyagerDevice.InputType + 1) % 3));
+				VoyagerDeviceInputType nextMode = (VoyagerDeviceInputType)(((int)VoyagerDevice.InputType + 1) % 3);
+				VoyagerDevice.SetInputType(nextMode);
+
+				if( nextMode != VoyagerDeviceInputType.Lite )
+				{
+					VoyagerDevice.SetPitchParams(pitch, pitchSpeed, pitchAccel, pitchDecel );
+					VoyagerDevice.SetYawParams(yaw, yawSpeed, yawAccel, yawDecel);
+				}
 			}
 
 			if( inputTypeLabel )
