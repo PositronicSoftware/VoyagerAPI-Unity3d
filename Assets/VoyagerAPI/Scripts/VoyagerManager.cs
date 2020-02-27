@@ -345,6 +345,8 @@ namespace Positron
 			VoyagerDevice.OnStopped += OnVoyagerStopped;
 			VoyagerDevice.OnMuteToggle += OnVoyagerToggleMute;
 			VoyagerDevice.OnRecenter += OnVoyagerRecenterHMD;
+			VoyagerDevice.OnUserPresentToggle += OnVoyagerUserPresentToggle;
+			VoyagerDevice.OnSixDofPresentToggle += OnVoyagerSixDofTrackingToggle;
 		}
 
 		void OnVoyagerPlayStateChange( VoyagerDevicePlayState InState )
@@ -424,6 +426,30 @@ namespace Positron
 				{
 					Debug.LogWarning("Recieved OnVoyagerRecenterHMD() 'Recenter' callback when UnityEngine.XR is disabled.");
 				}
+			}
+		}
+
+		void OnVoyagerUserPresentToggle(bool InValue)
+		{
+			if( InValue )
+			{
+				Debug.Log("Recieved OnVoyagerUserPresentToggle() with 'UserPresent' TRUE.");
+			}
+			else
+			{
+				Debug.LogWarning("Recieved OnVoyagerUserPresentToggle() with 'UserPresent' FALSE.");
+			}
+		}
+
+		void OnVoyagerSixDofTrackingToggle(bool InValue)
+		{
+			if( InValue )
+			{
+				Debug.Log("Recieved OnVoyagerSixDofTrackingToggle() with 'SixDofPresent' TRUE.");
+			}
+			else
+			{
+				Debug.LogWarning("Recieved OnVoyagerSixDofTrackingToggle() with 'SixDofPresent' FALSE.");
 			}
 		}
 

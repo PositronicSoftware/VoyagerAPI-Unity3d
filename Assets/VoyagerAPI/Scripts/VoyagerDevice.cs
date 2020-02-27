@@ -1,10 +1,10 @@
 using System.Collections;
 using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.XR;
+using UnityEngine.XR.WSA;
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -14,7 +14,7 @@ namespace Positron
 {
 	public static class VoyagerDefaults
 	{
-		public const string apiVersion = "1.2.1";
+		public const string apiVersion = "1.3.0";
 
 		// Connection defaults
 		public const string localHostIP = "127.0.0.1";
@@ -108,6 +108,8 @@ namespace Positron
 		static public event VoyagerEventDelegate OnFastForward;
 		static public event VoyagerEventDelegate OnRewind;
 		static public event VoyagerMotionProfileEventDelegate OnMotionProfileChange;
+		static public event VoyagerToggleEventDelegate OnUserPresentToggle;
+		static public event VoyagerToggleEventDelegate OnSixDofPresentToggle;
 
 		// The current state used by the Interface.  State.Stop, State.Play, State.Pause
 		static public VoyagerDevicePlayState _playState = VoyagerDevicePlayState.Stop;
@@ -196,6 +198,13 @@ namespace Positron
 		static public bool IsUserPresent
 		{
 			get{ return _isUserPresent; }
+		}
+
+		// loaded = bool, is the content loaded or not
+		static private bool _isSixDofPresent = false;
+		static public bool IsSixDofPresent
+		{
+			get{ return _isSixDofPresent; }
 		}
 
 		// currentTime = int, the current time of the current motion profile
@@ -310,7 +319,7 @@ namespace Positron
 
 					if( newPacket != null )
 					{
-						lock( criticalSection )
+						lock (criticalSection)
 						{
 							// Check for out-of-order UDP packet Recv
 							if( lastRecvPacketId > -1 && newPacket.ID <= lastRecvPacketId )
@@ -762,15 +771,6 @@ namespace Positron
 			}
 		}
 
-		// Sets the Interface.userPresent variable and sends to Voyager if the content is loaded
-		static public void SetUserPresent(bool hmdOn)
-		{
-			_isUserPresent = hmdOn;
-			deviceState.@event.userPresent = _isUserPresent;
-
-			Debug.Log("VoyagerDevice >> | command | 'Set UserPresent' " + _isUserPresent);
-		}
-
 		// Toggles the Interface.mute value, and sends value to Voyager
 		static public void ToggleMute()
 		{
@@ -824,13 +824,37 @@ namespace Positron
 			}
 		}
 
+		static void SetUserPresent(bool value)
+		{
+			var prevVal = _isUserPresent;
+			_isUserPresent = value;
+			deviceState.@event.userPresent = _isUserPresent;
+
+			if( value != prevVal && OnUserPresentToggle != null )
+			{
+				OnUserPresentToggle(value);
+			}
+		}
+
+		static void SetSixDofPresent(bool value)
+		{
+			var prevVal = _isSixDofPresent;
+			_isSixDofPresent = value;
+			// #TODO deviceState.@event.sixDofPresent = _isSixDofPresent;
+
+			if( value != prevVal && OnSixDofPresentToggle != null )
+			{
+				OnSixDofPresentToggle(value);
+			}
+		}
+
 		IEnumerator OnProcessRecvPacketsTick()
 		{
 			float tickRate = Mathf.Max(10, VoyagerDefaults.processRecvPacketsTickMS) * 0.001f;	// millisecond to second
 
 			while( true )
 			{
-				lock( criticalSection )
+				lock (criticalSection)
 				{
 					if( recvPacketsQueue.Count > 0 )
 					{
@@ -918,6 +942,13 @@ namespace Positron
 				}
 				yield return new WaitForSecondsRealtime(tickRate);
 			}
+		}
+
+		private void Update()
+		{
+			// Auto-set certain parameters
+			SetUserPresent(XRDevice.isPresent && (XRDevice.userPresence == UserPresenceState.Present));
+			SetSixDofPresent(WorldManager.state == PositionalLocatorState.Active);
 		}
 
 		void OnApplicationQuit()

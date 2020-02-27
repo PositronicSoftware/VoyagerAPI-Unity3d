@@ -126,6 +126,7 @@ VoyagerDevice.OnStopped += OnVoyagerStopped;
 VoyagerDevice.OnMuteToggle += OnVoyagerToggleMute;
 VoyagerDevice.OnRecenter += OnVoyagerRecenterHMD;
 VoyagerDevice.OnMotionProfileChange += OnVoyagerMotionProfileChange;
+VoyagerDevice.OnUserPresentToggle += OnVoyagerUserPresentToggle;
 ```
 
 ### 04 | Send Experience Time back to PSM
