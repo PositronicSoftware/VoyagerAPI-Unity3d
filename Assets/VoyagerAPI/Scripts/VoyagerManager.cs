@@ -242,11 +242,19 @@ namespace Positron
 			}
 
 			// Init HMD
+			#if UNITY_2019_3_OR_NEWER
+			if ( VoyagerDevice.IsPresent() && XRSettings.enabled )
+			{
+				XRDevice.SetTrackingSpaceType(XRSpace);
+				InputTracking.Recenter();
+			}
+			#else
 			if( XRDevice.isPresent && XRSettings.enabled )
 			{
 				XRDevice.SetTrackingSpaceType(XRSpace);
 				InputTracking.Recenter();
 			}
+			#endif
 		}
 
 		IEnumerator Start()
@@ -415,9 +423,10 @@ namespace Positron
 
 		void OnVoyagerRecenterHMD()
 		{
-			if( XRDevice.isPresent )
+			#if UNITY_2019_3_OR_NEWER
+			if ( VoyagerDevice.IsPresent() )
 			{
-				if( XRSettings.enabled )
+				if ( XRSettings.enabled )
 				{
 					XRDevice.SetTrackingSpaceType( XRSpace );
 					InputTracking.Recenter();
@@ -427,6 +436,20 @@ namespace Positron
 					Debug.LogWarning("Recieved OnVoyagerRecenterHMD() 'Recenter' callback when UnityEngine.XR is disabled.");
 				}
 			}
+			#else
+			if ( XRDevice.isPresent )
+			{
+				if ( XRSettings.enabled )
+				{
+					XRDevice.SetTrackingSpaceType( XRSpace );
+					InputTracking.Recenter();
+				}
+				else
+				{
+					Debug.LogWarning("Recieved OnVoyagerRecenterHMD() 'Recenter' callback when UnityEngine.XR is disabled.");
+				}
+			}
+			#endif
 		}
 
 		void OnVoyagerUserPresentToggle(bool InValue)

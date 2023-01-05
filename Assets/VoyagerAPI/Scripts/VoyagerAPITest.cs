@@ -58,12 +58,21 @@ namespace Positron
 			DontDestroyOnLoad( this );
 
 			// Init HMD
-			if( XRDevice.isPresent && XRSettings.enabled )
+			#if UNITY_2017_2_OR_NEWER
+			if ( VoyagerDevice.IsPresent() && XRSettings.enabled )
 			{
 				XRDevice.SetTrackingSpaceType(TrackingSpaceType.Stationary);
 
 				InputTracking.Recenter();
 			}
+			#else
+			if ( XRDevice.isPresent && XRSettings.enabled )
+			{
+				XRDevice.SetTrackingSpaceType(TrackingSpaceType.Stationary);
+
+				InputTracking.Recenter();
+			}
+			#endif
 		}
 
 		IEnumerator Start()

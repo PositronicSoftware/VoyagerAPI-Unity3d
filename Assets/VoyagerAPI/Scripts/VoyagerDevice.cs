@@ -944,11 +944,35 @@ namespace Positron
 			}
 		}
 
+		public static bool IsPresent()
+		{
+			var xrDisplaySubsystems = new List<XRDisplaySubsystem>();
+			SubsystemManager.GetInstances<XRDisplaySubsystem>(xrDisplaySubsystems);
+			foreach (var xrDisplay in xrDisplaySubsystems)
+			{
+				if (xrDisplay.running)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		private void Update()
 		{
 			// Auto-set certain parameters
+			#if UNITY_2019_3_OR_NEWER
+			SetUserPresent(IsPresent());
+			#else
 			SetUserPresent(XRDevice.isPresent && (XRDevice.userPresence == UserPresenceState.Present));
+			#endif
+
+			#if UNITY_2020_2_OR_NEWER
+			// UnityEngine.XR.WSA.WorldManager is obsolete no replacement available
+			SetSixDofPresent(true);
+			#else
 			SetSixDofPresent(WorldManager.state == PositionalLocatorState.Active);
+			#endif
 		}
 
 		void OnApplicationQuit()
