@@ -1,6 +1,7 @@
 /* Copyright 2017 Positron code by Brad Nelson */
 
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.XR;
@@ -58,21 +59,30 @@ namespace Positron
 			DontDestroyOnLoad( this );
 
 			// Init HMD
-			#if UNITY_2017_2_OR_NEWER
-			if ( VoyagerDevice.IsPresent() && XRSettings.enabled )
+			if ( XRSettings.enabled )
 			{
-				XRDevice.SetTrackingSpaceType(TrackingSpaceType.Stationary);
+				#if UNITY_2019_3_OR_NEWER
+				if ( VoyagerDevice.IsPresent())
+				{
+					List<XRInputSubsystem> xrInputSubsystems = new List<XRInputSubsystem>();
+					SubsystemManager.GetInstances<XRInputSubsystem>(xrInputSubsystems);
 
-				InputTracking.Recenter();
+					for (int i = 0; i < xrInputSubsystems.Count; i++)
+					{
+						if (xrInputSubsystems[i] != null) {
+							xrInputSubsystems[i].TrySetTrackingOriginMode(TrackingOriginModeFlags.Device);
+							xrInputSubsystems[i].TryRecenter();
+						}
+					}
+				}
+				#else
+				if ( XRDevice.isPresent )
+				{
+					XRDevice.SetTrackingSpaceType(TrackingSpaceType.Stationary);
+					InputTracking.Recenter();
+				}
+				#endif
 			}
-			#else
-			if ( XRDevice.isPresent && XRSettings.enabled )
-			{
-				XRDevice.SetTrackingSpaceType(TrackingSpaceType.Stationary);
-
-				InputTracking.Recenter();
-			}
-			#endif
 		}
 
 		IEnumerator Start()

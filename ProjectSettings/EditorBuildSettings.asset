@@ -11,3 +11,6 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/VoyagerAPI/Scenes/Voyager API Test.unity
     guid: 92159439a921afd498964d1c44aedaae
+  m_configObjects:
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 4febb8a34760ed44d975fe3039f94f88,
+      type: 2}

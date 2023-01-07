@@ -249,6 +249,22 @@ namespace Positron
 			get{ return _motionProfile; }
 		}
 
+		#if UNITY_2019_3_OR_NEWER
+		// xrDisplaySubsystems = List<XRDisplaySubsystem>, used to track user presence
+		static private List<XRDisplaySubsystem> _xrDisplaySubsystems = new List<XRDisplaySubsystem>();
+		static public List<XRDisplaySubsystem> xrDisplaySubsystems
+		{
+			get { 
+				return _xrDisplaySubsystems; }
+		}
+
+		// sixDofFilter = InputDeviceCharacteristics, define characteristics of the device for checking 6dof preference
+		static private InputDeviceCharacteristics sixDofFilter = InputDeviceCharacteristics.HeadMounted | InputDeviceCharacteristics.TrackedDevice;
+		static private List<InputDevice> inputDevices = new List<InputDevice>();
+		static private bool hasSixDof = false;
+		static private InputTrackingState inputTrackingState;
+		#endif
+
 		// Call in Awake to initialize the Device-Interface correctly.
 		public static void Init(VoyagerDeviceConfig config)
 		{
@@ -946,9 +962,10 @@ namespace Positron
 
 		public static bool IsPresent()
 		{
-			var xrDisplaySubsystems = new List<XRDisplaySubsystem>();
-			SubsystemManager.GetInstances<XRDisplaySubsystem>(xrDisplaySubsystems);
-			foreach (var xrDisplay in xrDisplaySubsystems)
+			#if UNITY_2019_3_OR_NEWER
+			_xrDisplaySubsystems.Clear();
+			SubsystemManager.GetInstances<XRDisplaySubsystem>(_xrDisplaySubsystems);
+			foreach (var xrDisplay in _xrDisplaySubsystems)
 			{
 				if (xrDisplay.running)
 				{
@@ -956,23 +973,47 @@ namespace Positron
 				}
 			}
 			return false;
+			#else
+			return XRDevice.isPresent && (XRDevice.userPresence == UserPresenceState.Present);
+			#endif
+		}
+
+		public static bool SixDofPresence() {
+			#if UNITY_2019_3_OR_NEWER
+			inputDevices.Clear();
+			InputDevices.GetDevicesWithCharacteristics(sixDofFilter, inputDevices);
+
+			for (int i = 0; i < inputDevices.Count; i++)
+			{
+				hasSixDof = false;
+
+				if (inputDevices[i] != null) {
+					inputDevices[i].TryGetFeatureValue(CommonUsages.trackingState, out inputTrackingState);
+
+					// Assuming the device has rotation and positional tracking, it is then 6Dof, 
+					// may need to check velocity if this is not valid
+					hasSixDof = (inputTrackingState & 
+					(InputTrackingState.Position | InputTrackingState.Rotation)) == 
+					((InputTrackingState.Position | InputTrackingState.Rotation));
+
+					if (hasSixDof) {
+						return true;
+					}
+				}
+			}
+
+			return false;
+			#else
+			return WorldManager.state == PositionalLocatorState.Active;
+			#endif
 		}
 
 		private void Update()
 		{
 			// Auto-set certain parameters
-			#if UNITY_2019_3_OR_NEWER
-			SetUserPresent(IsPresent());
-			#else
-			SetUserPresent(XRDevice.isPresent && (XRDevice.userPresence == UserPresenceState.Present));
-			#endif
+			SetUserPresent(IsPresent() && XRSettings.enabled);
 
-			#if UNITY_2020_2_OR_NEWER
-			// UnityEngine.XR.WSA.WorldManager is obsolete no replacement available
-			SetSixDofPresent(true);
-			#else
-			SetSixDofPresent(WorldManager.state == PositionalLocatorState.Active);
-			#endif
+			SetSixDofPresent(SixDofPresence());
 		}
 
 		void OnApplicationQuit()

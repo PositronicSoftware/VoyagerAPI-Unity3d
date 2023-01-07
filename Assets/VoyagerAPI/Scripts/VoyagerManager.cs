@@ -1,9 +1,13 @@
 /* Copyright 2017 Positron code by Brad Nelson */
 
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.XR;
+#if UNITY_2019_3_OR_NEWER
+using UnityEngine.XR.Management;
+#endif
 
 namespace Positron
 {
@@ -18,7 +22,13 @@ namespace Positron
 		// State to initialize the Voyager API in.
 		public VoyagerMangerStartMode startMode = VoyagerMangerStartMode.StartPaused;
 
+		#if UNITY_2019_3_OR_NEWER
+		// Tracking space types, Stationary generally refers to the Device tracking origin mode, 
+		// and RoomScale generally refers to Floor tracking origin mode, but it can depend somewhat on the intricacies of the SDK
+		public TrackingOriginModeFlags XRSpace = TrackingOriginModeFlags.Device;
+		#else
 		public TrackingSpaceType XRSpace = TrackingSpaceType.Stationary;
+		#endif
 
 		[ Header("Content Path") ]
 
@@ -49,6 +59,11 @@ namespace Positron
 
 		private float lastTrackSwitchTime = 0f;
 		private float lastTrackSwitchDelay = 1f;
+
+		#if UNITY_2019_3_OR_NEWER
+		static private List<XRInputSubsystem> xrInputSubsystems = new List<XRInputSubsystem>();
+		static private bool recenteredHMD = false;
+		#endif
 
 		// Fade in the screen
 		public void ScreenFadeIn()
@@ -97,6 +112,10 @@ namespace Positron
 		// Recenter the HMD
 		public void Recenter()
 		{
+			recenteredHMD = TryRecenter();
+			if (!recenteredHMD) {
+				Debug.LogWarning("HMD not recentered, try again");
+			}
 			VoyagerDevice.Recenter();
 		}
 
@@ -232,6 +251,48 @@ namespace Positron
 			}
 		}
 
+		public bool TryRecenter() {
+			if (!XRSettings.enabled) {
+				return false;
+			}
+
+			#if UNITY_2019_3_OR_NEWER
+			if ( VoyagerDevice.IsPresent())
+			{
+				bool recentered = false;
+				xrInputSubsystems.Clear();
+				SubsystemManager.GetInstances<XRInputSubsystem>(xrInputSubsystems);
+
+				for (int i = 0; i < xrInputSubsystems.Count; i++)
+				{
+					bool tryRecenter = false;
+					if (xrInputSubsystems[i] != null) {
+						xrInputSubsystems[i].TrySetTrackingOriginMode(XRSpace);
+						tryRecenter = xrInputSubsystems[i].TryRecenter();
+					}
+
+					if (tryRecenter) {
+						recentered = true;
+					}
+				}
+
+				return recentered;
+			}
+
+			return false;
+			#else
+			if ( XRDevice.isPresent )
+			{
+				XRDevice.SetTrackingSpaceType(XRSpace);
+				InputTracking.Recenter();
+
+				return true;
+			}
+
+			return false;
+			#endif
+		}
+
 		void Awake()
 		{
 			DontDestroyOnLoad( this );
@@ -242,19 +303,7 @@ namespace Positron
 			}
 
 			// Init HMD
-			#if UNITY_2019_3_OR_NEWER
-			if ( VoyagerDevice.IsPresent() && XRSettings.enabled )
-			{
-				XRDevice.SetTrackingSpaceType(XRSpace);
-				InputTracking.Recenter();
-			}
-			#else
-			if( XRDevice.isPresent && XRSettings.enabled )
-			{
-				XRDevice.SetTrackingSpaceType(XRSpace);
-				InputTracking.Recenter();
-			}
-			#endif
+			TryRecenter();
 		}
 
 		IEnumerator Start()
@@ -428,8 +477,11 @@ namespace Positron
 			{
 				if ( XRSettings.enabled )
 				{
-					XRDevice.SetTrackingSpaceType( XRSpace );
-					InputTracking.Recenter();
+					recenteredHMD = TryRecenter();
+
+					if (!recenteredHMD) {
+						Debug.LogWarning("HMD not recentered, try again");
+					}
 				}
 				else
 				{
@@ -441,8 +493,7 @@ namespace Positron
 			{
 				if ( XRSettings.enabled )
 				{
-					XRDevice.SetTrackingSpaceType( XRSpace );
-					InputTracking.Recenter();
+					TryRecenter();
 				}
 				else
 				{
