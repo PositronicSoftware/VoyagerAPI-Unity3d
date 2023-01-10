@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using UnityEngine;
 #if UNITY_2017_2_OR_NEWER
 using UnityEngine.XR;
+using UnityEngine.Rendering;
 #else
 using UnityEngine.VR;
 #endif
@@ -22,6 +23,24 @@ public class ScreenFader : MonoBehaviour
     private bool faded = false;
     private bool lastFadeIn = false;
     private List<ScreenFadeControl> fadeControls = new List<ScreenFadeControl>();
+
+#if UNITY_2019_1_OR_NEWER
+	void OnEnable() {
+		if (GraphicsSettings.renderPipelineAsset != null) {
+			RenderPipelineManager.endCameraRendering += RenderPipelineManager_endCameraRendering;
+		}
+	}
+
+	void OnDisable() {
+		if (GraphicsSettings.renderPipelineAsset != null) {
+			RenderPipelineManager.endCameraRendering -= RenderPipelineManager_endCameraRendering;
+		}
+	}
+
+	private void RenderPipelineManager_endCameraRendering(ScriptableRenderContext context, Camera camera) {
+		OnPostRender();
+	}
+#endif
 
 	void Start() {
 		faded = fadeIn;
