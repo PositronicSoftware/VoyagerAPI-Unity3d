@@ -92,29 +92,39 @@ if( !VoyagerDevice.IsInitialized )
 	yield break;
 }
 ```
-
-### 02 | Connect VoyagerDevice to PSM
-
-The following sequence of calls ensures that the newly created `UVoyagerDevice` instance is linked with the **Positronic Show Manager** ( PSM ) that controls the chair.
+### 02 | Listen to Connect/Disconnect events 
+You must wait for a connection to be established before following the sequence of calls in step 03
 
 ```csharp
-// Set the Content Params.
-VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
-
-// Experience should start in Paused state.
-VoyagerDevice.Pause();
-
-// Set the Content ID.
-VoyagerDevice.LoadContent("C:/ExecutableName.exe");
-
-// Notify PSM that loading is complete.
-VoyagerDevice.Loaded(true);
-
-// Set the initial Motion Profile track name.
-VoyagerDevice.SetMotionProfile( "TestProfile" );
+VoyagerDevice.OnClientConnected += OnConnected;
+VoyagerDevice.OnClientDisconnected += OnDisconnected;
 ```
 
-### 03 | Listen To UVoyagerDevice Events
+### 03 | Connect VoyagerDevice to PSM
+
+The following sequence of calls ensures that the newly created `VoyagerDevice` instance is linked with the **Positronic Show Manager** ( PSM ) that controls the chair.
+
+```csharp
+private void OnConnected()
+{
+	// Set the Content Params.
+	VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
+
+	// Experience should start in Paused state.
+	VoyagerDevice.Pause();
+
+	// Set the Content ID.
+	VoyagerDevice.LoadContent("C:/media/content.mp4");
+
+	// Notify PSM that loading is complete.
+	VoyagerDevice.Loaded(true);
+
+	// Set the initial Motion Profile track name.
+	VoyagerDevice.SetMotionProfile( "TestProfile" );
+}
+```
+
+### 04 | Listen To additional VoyagerDevice Events
 
 The `VoyagerDevice` has useful events that you can Bind to in order to control your experience. These events are triggered based on calls from Positronic Show Manager ( PSM ).
 
@@ -129,7 +139,7 @@ VoyagerDevice.OnMotionProfileChange += OnVoyagerMotionProfileChange;
 VoyagerDevice.OnUserPresentToggle += OnVoyagerUserPresentToggle;
 ```
 
-### 04 | Send Experience Time back to PSM
+### 05 | Send Experience Time back to PSM
 
 ```csharp
 switch( VoyagerDevice.PlayState )
@@ -156,7 +166,7 @@ For the Voyager Chair to accurately synchronize motion with the experience, you 
 * You must continue to send _Experience Time_ back to PSM even if the Voyager state is Paused.
 * If PSM stops receiving time data from the API for a certain duration it will cause errors.
 
-### 05 | Key Commands for Motion Encoding and Testing
+### 06 | Key Commands for Motion Encoding and Testing
 
 For us to easily create Motion data for your experience, and test it, we require projects to support the following Keyboard commands.
 
@@ -174,6 +184,9 @@ Key 				| Command
 
 ## Device Settings Config
 
+NOTE: using an ip other than 127.0.0.1 is untested/unsupported
+Note: onScreenLogs is not implemented.
+
 If you wish to load _VoyagerDeviceConfig_ settings from a config-file, do the following:
 
 1. Setup a folder in '<ProjectName>/Assets/StreamingAssets/' directory, that will contain your config file(s). 
@@ -185,15 +198,15 @@ If you wish to load _VoyagerDeviceConfig_ settings from a config-file, do the fo
 	"comment": "Change the 'use' property above to select settings: 1-local, 2-development, 3-production",
 	"local":
 	{
-		"ipAddr": "127.0.0.1", "sendPortNum": 61557, "recvPortNum": 7755, "onScreenLogs": true
+		"ipAddr": "127.0.0.1", "portNum": 61557, "onScreenLogs": true
 	},
 	"development":
 	{
-		"ipAddr": "192.166.0.82", "sendPortNum": 61557, "recvPortNum": 7755, "onScreenLogs": true
+		"ipAddr": "127.0.0.1", "portNum": 61557, "onScreenLogs": true
 	},
 	"production":
 	{
-		"ipAddr": "192.168.13.100", "sendPortNum": 61557, "recvPortNum": 7755, "onScreenLogs": true
+		"ipAddr": "127.0.0.1", "portNum": 61557, "onScreenLogs": true
 	}
 }
 ```
@@ -219,13 +232,13 @@ VoyagerDevice.Init(deviceConfig); // Initialize the interface w/ the config.
 | :-------- | :-------- |
 | In-Editor | `<ProjectDir>\Assets\StreamingAssets\<ConfigDir>\<FileName>` |
 | Windows Build | `<BuildFolder>\<ProjectName>_Data\StreamingAssets\<ConfigDir>\<FileName>` |
-| OculusGo Build | `/storage/emulated/0/Android/data/<packagename>/files/<ConfigDir>/<FileName>` |
+| Quest 3 Build | `/storage/emulated/0/Android/data/<packagename>/files/<ConfigDir>/<FileName>` |
 
 **In-Editor and Windows Builds**
 
 You can edit your config-file(s) without having to rebuild ( assuming you did step 2 ). This allows you to quickly test different network settings.
 
-**Oculus-Go Builds**
+**Quest 3 Builds**
 
 For Android, the config loading system will use the  `'/storage/emulated/0/Android/data/<packagename>/files/<ConfigDir>/...'` path for your configs.
 
@@ -257,7 +270,7 @@ A simple test scene for the API. UI buttons make API calls to the VoyagerDevice 
 
 Runtime logging from the API is written to the log file.
 
-**Oculus GO**
+**Quest 3**
 
 You can use our batch script Push_DeviceConfig.bat in `BatchScripts/` to push a new JSON config file(s)
 

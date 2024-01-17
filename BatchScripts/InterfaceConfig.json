@@ -1,25 +1,19 @@
 {
-	"use": 2,
-	"comment": "Change the 'use' property above to select settings: 1-local, 2-development, 3-production",
-	"local":
-	{
-		"ipAddr": "127.0.0.1",
-   		"sendPortNum": 61557,
-    	"recvPortNum": 7755,
-    	"onScreenLogs": true
-	},
-	"development":
-	{
-		"ipAddr": "192.168.1.247",
-   		"sendPortNum": 61557,
-    	"recvPortNum": 7755,
-    	"onScreenLogs": true
-	},
-	"production":
-	{
-		"ipAddr": "192.168.13.100",
-   		"sendPortNum": 61557,
-    	"recvPortNum": 7755,
-    	"onScreenLogs": true
-	}
+    "use": 1,
+    "comment": "Change the 'use' property above to select settings: 1-local, 2-development, 3-production",
+    "local": {
+        "ipAddr": "127.0.0.1",
+        "portNum": 61557,
+        "onScreenLogs": true
+    },
+    "development": {
+        "ipAddr": "127.0.0.1",
+        "portNum": 61557,
+        "onScreenLogs": true
+    },
+    "production": {
+        "ipAddr": "127.0.0.1",
+        "portNum": 61557,
+        "onScreenLogs": false
+    }
 }

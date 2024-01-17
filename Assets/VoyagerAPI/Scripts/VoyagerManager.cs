@@ -327,12 +327,15 @@ namespace Positron
 			// Initialize interface
 			VoyagerDevice.Init(config);
 
-			// Quick Exit: Not initialized
-			if( !VoyagerDevice.IsInitialized )
+            // Quick Exit: Not initialized
+            if ( !VoyagerDevice.IsInitialized )
 			{
 				Debug.LogError("VoyagerDevice not initialized.");
 				yield break;
 			}
+
+            // Wait until we are connected.
+            yield return new WaitUntil(() => VoyagerDevice.IsConnected);
 
 			// Set the Content Params.
 			VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");

@@ -101,34 +101,58 @@ namespace Positron
 			// Initialize interface
 			VoyagerDevice.Init(config);
 
-			// Quick Exit: Not initialized
-			if( !VoyagerDevice.IsInitialized )
+            // Quick Exit: Not initialized
+            if ( !VoyagerDevice.IsInitialized )
 			{
 				Debug.LogError("VoyagerDevice not initialized.");
 				yield break;
 			}
 
-			// Set the Content Params.
-			VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
+			// Handle what to do when connected
+			VoyagerDevice.OnConnected += OnVoyagerConnected;
+            VoyagerDevice.OnDisconnected += OnVoyagerDisconnected;
 
-			// Experience should start in Paused state.
-			VoyagerDevice.Pause();
 
-			// Set the Content ID.
-			VoyagerDevice.LoadContent("file:///C:/Test/Test.mp4");
+        }
+        private void OnVoyagerConnected()
+        {
+            // Set the Content Params.
+            VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
 
-			// Notify PSM that loading is complete.
-			VoyagerDevice.Loaded(true);
+            // Experience should start in Paused state.
+            VoyagerDevice.Pause();
 
-			// Set the initial Motion Profile track name.
-			VoyagerDevice.SetMotionProfile( "TestProfile" );
+            // Set the Content ID.
+            VoyagerDevice.LoadContent("C:/media/content.mp4");
 
-			configText.text = VoyagerDevice.Config.ToString();
-		}
+            // Notify PSM that loading is complete.
+            VoyagerDevice.Loaded(true);
 
-		void Update()
+            // Set the initial Motion Profile track name.
+            VoyagerDevice.SetMotionProfile("TestProfile");
+
+            configText.text = VoyagerDevice.Config.ToString();
+        }
+
+		private void OnVoyagerDisconnected()
 		{
-			if( VoyagerDevice.Instance == null || !VoyagerDevice.IsInitialized )
+			// This will log a warning, but we need to update the device state.
+            VoyagerDevice.Pause();
+
+			// Since there is a guard for IsConnected in Update, we need to call UpdateText otherwise the text won't reflect the current paused state.
+			UpdateText();
+        }
+
+        private void OnDestroy()
+        {
+			VoyagerDevice.OnConnected -= OnVoyagerConnected;
+            VoyagerDevice.OnDisconnected -= OnVoyagerDisconnected;
+
+        }
+
+        void Update()
+		{
+			if( VoyagerDevice.Instance == null || !VoyagerDevice.IsInitialized || !VoyagerDevice.IsConnected)
 			{
 				return;
 			}
@@ -200,15 +224,18 @@ namespace Positron
 					break;
 				}
 			}
-
-			string deviceStateStr;
-			string lastRecvDataStr;
-			VoyagerDeviceUtils.DevicePacketToJson(VoyagerDevice.deviceState, out deviceStateStr);
-			VoyagerDeviceUtils.DevicePacketToJson(VoyagerDevice.LastRecvDevicePacket, out lastRecvDataStr);
-
-			deviceDataText.text = deviceStateStr;
-			lastRecvDataText.text = lastRecvDataStr;
-			stateText.text = string.Format("Voyager state '{0}'", VoyagerDevice.PlayState.ToString());
+			UpdateText();
 		}
+		void UpdateText()
+		{
+            string deviceStateStr;
+            string lastRecvDataStr;
+            VoyagerDeviceUtils.DevicePacketToJson(VoyagerDevice.deviceState, out deviceStateStr);
+            VoyagerDeviceUtils.DevicePacketToJson(VoyagerDevice.LastRecvDevicePacket, out lastRecvDataStr);
+
+            deviceDataText.text = deviceStateStr;
+            lastRecvDataText.text = lastRecvDataStr;
+            stateText.text = string.Format("Voyager state '{0}'", VoyagerDevice.PlayState.ToString());
+        }
 	}
 }
