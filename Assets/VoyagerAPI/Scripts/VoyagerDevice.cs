@@ -24,7 +24,9 @@ namespace Positron
 
 	public delegate void VoyagerPlayStateEventDelegate( VoyagerDevicePlayState InState );
 
-	public delegate void VoyagerMotionProfileEventDelegate( string InProfile );
+    public delegate void VoyagerContentChangeEventDelegate(string InUrl);
+
+    public delegate void VoyagerMotionProfileEventDelegate( string InProfile );
 
 	public delegate void VoyagerToggleEventDelegate( bool InValue );
 
@@ -104,7 +106,8 @@ namespace Positron
 		static public event VoyagerEventDelegate OnFastForward;
 		static public event VoyagerEventDelegate OnRewind;
 		static public event VoyagerMotionProfileEventDelegate OnMotionProfileChange;
-		static public event VoyagerToggleEventDelegate OnUserPresentToggle;
+        static public event VoyagerContentChangeEventDelegate OnContentChange;
+        static public event VoyagerToggleEventDelegate OnUserPresentToggle;
 		static public event VoyagerToggleEventDelegate OnSixDofPresentToggle;
 
 		// The current state used by the Interface.  State.Stop, State.Play, State.Pause
@@ -387,8 +390,13 @@ namespace Positron
 				_stereoscopyMode = receivedPacket.@event.stereoscopy;
 				_contentUrl = receivedPacket.@event.url;
 
+				if (_previousContentUrl != _contentUrl)
+				{
+					OnContentChange?.Invoke(_contentUrl);
+				}
+
 				// Handle Motion profile change
-				if (receivedPacket.@event.motionProfile != _motionProfile)
+				if (receivedPacket.@event.motionProfile != _motionProfile && !string.IsNullOrEmpty(receivedPacket.@event.motionProfile))
 				{
 					SetMotionProfile(receivedPacket.@event.motionProfile);
 				}
@@ -1044,6 +1052,7 @@ namespace Positron
 				OnFastForward = null;
 				OnRewind = null;
 				OnMotionProfileChange = null;
+				OnContentChange = null;
 
 				_isInitialized = false;
 			}

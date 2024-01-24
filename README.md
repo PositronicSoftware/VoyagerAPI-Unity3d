@@ -1,10 +1,8 @@
-# Voyager API Unity3d Tester & Source
-
-Please use the latest release when intergating in to your project > [Releases](https://github.com/PositronicSoftware/VoyagerAPI-Unity3d/releases).
+# ALPHA Voyager API Unity3d Tester & Source
 
 ---------------------------------------------------------------------------
 
-## Key Classes
+## Key Classes & Scenes
 
 _Class_ **VoyagerDevice**
 
@@ -17,6 +15,22 @@ Defines the network-connection settings for interfacing with a Voyager chair. Us
 _Class_ **VoyagerDeviceUtils**
 
 Implements loading a _VoyagerDeviceConfig_ object from a JSON config-file. For details, read the 'Device Settings Config' section below.
+
+### Examples
+
+_Scene_ VoyagerAPI/Scenes/Voyager API Test.unity
+_Class_ VoyagerAPI/Scripts/VoyagerAPITest.cs
+
+_Scene_ Voyager API Example/Scenes/Voyager Demo.unity
+_Class_ VoyagerAPI/Scripts/VoyagerManager.cs
+
+## Important notes about this alpha
+
+### Connections
+Only 127.0.0.1:61557 is currently supported, don't use custom config files yet. The separate utility app will currently only connect on port 61557. 
+
+### Connecting/disconnecting
+This still needs to be tested further, but it has been tested in Voyager API Test.unity
 
 ---------------------------------------------------------------------------
 
@@ -33,10 +47,15 @@ Now add the `VoyagerManager` and `TimelineControl` Components to this GameObject
 ![VoyagerManager Properties](Docs/VoyagerManagerProperties.png)
 
 1. `Start Mode` allows you to initialize in the Voyager in different states based on project requirements.
+
+If in single experience executable mode:
+1. Check the single experience executable checkbox.
 2. `Path` should be set to your build executable path `"C:/ExecutableName.exe"` in the inspector.
-3. `Timeline Control` can be left null. It will be auto-set on Play if a TimelineControl component is detected.
-4. You can optimize the VoyagerManager SendTime() frequency on memory-constrained platforms by setting `optimizeSendTime = true` in the inspector.
-5. VoyagerManager will load your PSM connection settings from a JSON Config file: See [Device Settings Config](#device-settings-config).
+
+In either mode single experience or player mode: 
+1. `Timeline Control` can be left null. It will be auto-set on Play if a TimelineControl component is detected.
+2. You can optimize the VoyagerManager SendTime() frequency on memory-constrained platforms by setting `optimizeSendTime = true` in the inspector.
+3. VoyagerManager will load your PSM connection settings from a JSON Config file: See [Device Settings Config](#device-settings-config).
 
 VoyagerManager implements the following Keyboard commands for us to easily create Motion data and test your experience.
 
@@ -64,6 +83,8 @@ This component is required if your project is using 1 or more `PlayableDirector`
 ---------------------------------------------------------------------------
 
 ## Using the API - CSharp
+
+VoyagerAPITest.cs and VoyagerManager.cs both have examples of using the API, however pay careful attention to Caveats in step 05
 
 ### 01 | Construct and Init() a VoyagerDevice
 
@@ -98,6 +119,9 @@ You must wait for a connection to be established before following the sequence o
 ```csharp
 VoyagerDevice.OnClientConnected += OnConnected;
 VoyagerDevice.OnClientDisconnected += OnDisconnected;
+
+// If you are creating a player, this event fires when PSM sends a url
+VoyagerDevice.OnContentChange += OnVoyagerContentChange;
 ```
 
 ### 03 | Connect VoyagerDevice to PSM
@@ -112,16 +136,22 @@ private void OnConnected()
 
 	// Experience should start in Paused state.
 	VoyagerDevice.Pause();
+}
 
+
+// If you are creating a player, respond to psm events to change content. Otherwise these calls can go into OnConnected
+private void OnVoyagerContentChange(string inUrl)
+{
 	// Set the Content ID.
-	VoyagerDevice.LoadContent("C:/media/content.mp4");
+	VoyagerDevice.LoadContent(inUrl);
 
-	// Notify PSM that loading is complete.
+	// Notify PSM when loading is complete.
 	VoyagerDevice.Loaded(true);
 
 	// Set the initial Motion Profile track name.
-	VoyagerDevice.SetMotionProfile( "TestProfile" );
+	VoyagerDevice.SetMotionProfile("TestProfile");
 }
+
 ```
 
 ### 04 | Listen To additional VoyagerDevice Events
@@ -184,8 +214,10 @@ Key 				| Command
 
 ## Device Settings Config
 
-NOTE: using an ip other than 127.0.0.1 is untested/unsupported
-Note: onScreenLogs is not implemented.
+Using an ip other than 127.0.0.1 is untested/unsupported
+Using a port other than 61557 will not work because the utility app listens on this port.
+
+onScreenLogs is not implemented
 
 If you wish to load _VoyagerDeviceConfig_ settings from a config-file, do the following:
 
@@ -260,7 +292,7 @@ Povides a working example of how to initialize a VoyagerDevice
 
 **Voyager API Test.unity**
 
-A simple test scene for the API. UI buttons make API calls to the VoyagerDevice Instance. UI Tested with with mouse, Rift remote click, and gaze in Oculus Go.
+A simple test scene for the API. UI buttons make API calls to the VoyagerDevice Instance. UI Tested with with mouse and Quest 3 right controller
 
 ---------------------------------------------------------------------------
 

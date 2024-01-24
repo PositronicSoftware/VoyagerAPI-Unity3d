@@ -108,11 +108,10 @@ namespace Positron
 				yield break;
 			}
 
-			// Handle what to do when connected
-			VoyagerDevice.OnConnected += OnVoyagerConnected;
+            // Critical setup calls must be done when connected
+            VoyagerDevice.OnConnected += OnVoyagerConnected;
             VoyagerDevice.OnDisconnected += OnVoyagerDisconnected;
-
-
+			VoyagerDevice.OnContentChange += OnVoyagerContentChange;
         }
         private void OnVoyagerConnected()
         {
@@ -122,31 +121,35 @@ namespace Positron
             // Experience should start in Paused state.
             VoyagerDevice.Pause();
 
+            configText.text = VoyagerDevice.Config.ToString();
+        }
+
+		private void OnVoyagerContentChange(string inUrl)
+		{
             // Set the Content ID.
-            VoyagerDevice.LoadContent("C:/media/content.mp4");
+            VoyagerDevice.LoadContent(inUrl);
 
             // Notify PSM that loading is complete.
             VoyagerDevice.Loaded(true);
 
             // Set the initial Motion Profile track name.
             VoyagerDevice.SetMotionProfile("TestProfile");
-
-            configText.text = VoyagerDevice.Config.ToString();
         }
 
 		private void OnVoyagerDisconnected()
 		{
-			// This will log a warning, but we need to update the device state.
+            // Update the device state. This will log a warning since there is no connection.
             VoyagerDevice.Pause();
 
-			// Since there is a guard for IsConnected in Update, we need to call UpdateText otherwise the text won't reflect the current paused state.
-			UpdateText();
+            // Since there is a guard for IsConnected in Update, we need to call UpdateText otherwise the text won't reflect the current paused state.
+            UpdateText();
         }
 
         private void OnDestroy()
         {
 			VoyagerDevice.OnConnected -= OnVoyagerConnected;
             VoyagerDevice.OnDisconnected -= OnVoyagerDisconnected;
+			VoyagerDevice.OnContentChange -= OnVoyagerContentChange;
 
         }
 

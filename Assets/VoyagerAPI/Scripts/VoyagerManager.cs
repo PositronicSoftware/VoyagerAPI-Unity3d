@@ -5,9 +5,6 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.XR;
-#if UNITY_2019_3_OR_NEWER
-using UnityEngine.XR.Management;
-#endif
 
 namespace Positron
 {
@@ -26,15 +23,15 @@ namespace Positron
 		// Tracking space types, Stationary generally refers to the Device tracking origin mode, 
 		// and RoomScale generally refers to Floor tracking origin mode, but it can depend somewhat on the intricacies of the SDK
 		public TrackingOriginModeFlags XRSpace = TrackingOriginModeFlags.Device;
-		#else
+#else
 		public TrackingSpaceType XRSpace = TrackingSpaceType.Stationary;
-		#endif
+#endif
 
-		[ Header("Content Path") ]
-
-		// Path for this application's executable
-		[ SerializeField ]
-		private string path = "C:/ExecutableName.exe";
+		[Header("Content Path")]
+		public bool singleExperienceExecutable = false;
+		
+		[ SerializeField, Tooltip("Path for this application's executable, if it's a single experience executable")]
+        private string path = "C:/ExecutableName.exe";
 
 		[ Header("Timeline") ]
 
@@ -337,33 +334,57 @@ namespace Positron
             // Wait until we are connected.
             yield return new WaitUntil(() => VoyagerDevice.IsConnected);
 
-			// Set the Content Params.
-			VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
+			// Calling this before events are hooked up to retain old behavior
+			OnVoyagerConnected();
 
-			// Set the Voyager start state.
-			switch( startMode )
+            // ~===============================================
+            // Bind Events
+
+            VoyagerDevice.OnPlayStateChange += OnVoyagerPlayStateChange;
+			VoyagerDevice.OnPlay += OnVoyagerPlay;
+			VoyagerDevice.OnPaused += OnVoyagerPaused;
+			VoyagerDevice.OnStopped += OnVoyagerStopped;
+			VoyagerDevice.OnMuteToggle += OnVoyagerToggleMute;
+			VoyagerDevice.OnRecenter += OnVoyagerRecenterHMD;
+			VoyagerDevice.OnUserPresentToggle += OnVoyagerUserPresentToggle;
+			VoyagerDevice.OnSixDofPresentToggle += OnVoyagerSixDofTrackingToggle;
+
+            // Setup calls must be done when connected/on content change
+            VoyagerDevice.OnConnected += OnVoyagerConnected;
+            VoyagerDevice.OnDisconnected += OnVoyagerDisconnected;
+            VoyagerDevice.OnContentChange += OnVoyagerContentChange;
+        }
+        
+		private void OnVoyagerConnected()
+		{
+            // Set the Content Params.
+            VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
+
+            // Set the Voyager start state.
+            switch (startMode)
+            {
+                case VoyagerMangerStartMode.StartIdle:
+                    {
+                        VoyagerDevice.Idle();
+                        break;
+                    }
+                case VoyagerMangerStartMode.StartPaused:
+                    {
+                        VoyagerDevice.Pause();
+                        break;
+                    }
+                default:
+                    {
+                        Debug.LogError("Unhandled Start Mode " + startMode);
+                        break;
+                    }
+            }
+
+            if (singleExperienceExecutable)
 			{
-				case VoyagerMangerStartMode.StartIdle:
-				{
-					VoyagerDevice.Idle();
-					break;
-				}
-
-				case VoyagerMangerStartMode.StartPaused:
-				{
-					VoyagerDevice.Pause();
-					break;
-				}
-
-				default:
-				{
-					Debug.LogError( "Unhandled Start Mode " + startMode );
-					break;
-				}
-			}
-
 #if !UNITY_EDITOR
 			// Set the path to this executable so Voyager knows what application is playing
+			// NOTE: this selects the first executable in the directory, so it could wrongly be the crash handler...
 			path = System.IO.Directory.GetParent(Application.dataPath).FullName;
 			string[] executables = System.IO.Directory.GetFiles(path, "*.exe");
 
@@ -378,38 +399,47 @@ namespace Positron
 				yield break;
 			}
 #else
-			// Set the Content ID.
-			VoyagerDevice.LoadContent(path);
+				// Set the Content ID.
+				VoyagerDevice.LoadContent(path);
 #endif
+				// Notify PSM that loading is complete.
+				VoyagerDevice.Loaded(true);
 
-			// Notify PSM that loading is complete.
-			VoyagerDevice.Loaded(true);
-
-			// Set the initial Motion Profile track name.
-			if( timelineControl != null && timelineControl.HasTrackSetups )
-			{
-				var currDef = timelineControl.CurrentTrackDefinition;
-				VoyagerDevice.SetMotionProfile( currDef.motionProfile );
+				// Set the initial Motion Profile track name.
+				if(timelineControl != null && timelineControl.HasTrackSetups )
+				{
+					var currDef = timelineControl.CurrentTrackDefinition;
+					VoyagerDevice.SetMotionProfile(currDef.motionProfile );
+				}
+				else
+				{
+					VoyagerDevice.SetMotionProfile( "TestProfile" );
+				}
 			}
-			else
-			{
-				VoyagerDevice.SetMotionProfile( "TestProfile" );
-			}
-
-			// ~===============================================
-			// Bind Events
-
-			VoyagerDevice.OnPlayStateChange += OnVoyagerPlayStateChange;
-			VoyagerDevice.OnPlay += OnVoyagerPlay;
-			VoyagerDevice.OnPaused += OnVoyagerPaused;
-			VoyagerDevice.OnStopped += OnVoyagerStopped;
-			VoyagerDevice.OnMuteToggle += OnVoyagerToggleMute;
-			VoyagerDevice.OnRecenter += OnVoyagerRecenterHMD;
-			VoyagerDevice.OnUserPresentToggle += OnVoyagerUserPresentToggle;
-			VoyagerDevice.OnSixDofPresentToggle += OnVoyagerSixDofTrackingToggle;
 		}
 
-		void OnVoyagerPlayStateChange( VoyagerDevicePlayState InState )
+        private void OnVoyagerContentChange(string inUrl)
+        {
+			if (!singleExperienceExecutable)
+			{
+				// Set the Content ID.
+				VoyagerDevice.LoadContent(inUrl);
+
+				// Notify PSM that loading is complete.
+				VoyagerDevice.Loaded(true);
+
+				// Set the Motion Profile
+                VoyagerDevice.SetMotionProfile("A");
+            }
+        }
+
+        private void OnVoyagerDisconnected()
+        {
+            // Update the device state. This will log a warning since there is no connection.
+            VoyagerDevice.Pause();
+        }
+
+        void OnVoyagerPlayStateChange( VoyagerDevicePlayState InState )
 		{
 			switch( InState )
 			{
@@ -532,7 +562,7 @@ namespace Positron
 
 		void Update()
 		{
-			if( VoyagerDevice.Instance == null || !VoyagerDevice.IsInitialized )
+			if( VoyagerDevice.Instance == null || !VoyagerDevice.IsInitialized || !VoyagerDevice.IsConnected)
 			{
 				return;
 			}
