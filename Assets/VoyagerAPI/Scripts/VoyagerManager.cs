@@ -382,26 +382,9 @@ namespace Positron
 
             if (singleExperienceExecutable)
 			{
-#if !UNITY_EDITOR
-			// Set the path to this executable so Voyager knows what application is playing
-			// NOTE: this selects the first executable in the directory, so it could wrongly be the crash handler...
-			path = System.IO.Directory.GetParent(Application.dataPath).FullName;
-			string[] executables = System.IO.Directory.GetFiles(path, "*.exe");
-
-			// Load the content if there is an executable
-			if( executables != null && executables.Length > 0 )
-			{
-				VoyagerDevice.LoadContent(executables[ 0 ]);
-			}
-			else
-			{
-				Debug.LogError("No executable found at " + path);
-				yield break;
-			}
-#else
 				// Set the Content ID.
 				VoyagerDevice.LoadContent(path);
-#endif
+
 				// Notify PSM that loading is complete.
 				VoyagerDevice.Loaded(true);
 

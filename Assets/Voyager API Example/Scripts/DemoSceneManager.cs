@@ -15,6 +15,14 @@ namespace Positron
 		public GameObject gazePoint;
 		public float shootForce;
 		public VRStandardAssets.Flyer.FlyerLaserController laserController;
+		public VoyagerManager voyagerManager;
+
+
+        public void OnClickStartGame()
+		{
+			voyagerManager.SetPlayableTrack(0);
+			voyagerManager.Play();
+        }
 
 		private void Awake()
 		{
@@ -34,6 +42,7 @@ namespace Positron
 			{
 				flyerController.StartGame();
 			}
+			flyerController = FindObjectOfType<VRStandardAssets.Flyer.FlyerMovementController>();
 		}
 
 		void Update()
