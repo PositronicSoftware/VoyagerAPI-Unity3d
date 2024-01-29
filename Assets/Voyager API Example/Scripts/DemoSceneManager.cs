@@ -31,7 +31,7 @@ namespace Positron
 
 		IEnumerator Start()
 		{
-			while( VoyagerDevice.Instance == null && !VoyagerDevice.IsInitialized )
+			while( VoyagerDevice.Instance == null && !VoyagerDevice.IsInitialized  && !VoyagerDevice.IsConnected)
 			{
 				yield return null;
 			}
@@ -42,7 +42,6 @@ namespace Positron
 			{
 				flyerController.StartGame();
 			}
-			flyerController = FindObjectOfType<VRStandardAssets.Flyer.FlyerMovementController>();
 		}
 
 		void Update()
