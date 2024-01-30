@@ -19,13 +19,9 @@ namespace Positron
 		// State to initialize the Voyager API in.
 		public VoyagerMangerStartMode startMode = VoyagerMangerStartMode.StartPaused;
 
-		#if UNITY_2019_3_OR_NEWER
 		// Tracking space types, Stationary generally refers to the Device tracking origin mode, 
 		// and RoomScale generally refers to Floor tracking origin mode, but it can depend somewhat on the intricacies of the SDK
 		public TrackingOriginModeFlags XRSpace = TrackingOriginModeFlags.Device;
-#else
-		public TrackingSpaceType XRSpace = TrackingSpaceType.Stationary;
-#endif
 
 		[Header("Content Path")]
 		public bool singleExperienceExecutable = false;
@@ -57,10 +53,8 @@ namespace Positron
 		private float lastTrackSwitchTime = 0f;
 		private float lastTrackSwitchDelay = 1f;
 
-		#if UNITY_2019_3_OR_NEWER
 		static private List<XRInputSubsystem> xrInputSubsystems = new List<XRInputSubsystem>();
 		static private bool recenteredHMD = false;
-		#endif
 
 		// Fade in the screen
 		public void ScreenFadeIn()
@@ -253,7 +247,6 @@ namespace Positron
 				return false;
 			}
 
-			#if UNITY_2019_3_OR_NEWER
 			if ( VoyagerDevice.IsPresent())
 			{
 				bool recentered = false;
@@ -277,17 +270,6 @@ namespace Positron
 			}
 
 			return false;
-			#else
-			if ( XRDevice.isPresent )
-			{
-				XRDevice.SetTrackingSpaceType(XRSpace);
-				InputTracking.Recenter();
-
-				return true;
-			}
-
-			return false;
-			#endif
 		}
 
 		void Awake()
@@ -488,7 +470,6 @@ namespace Positron
 
 		void OnVoyagerRecenterHMD()
 		{
-			#if UNITY_2019_3_OR_NEWER
 			if ( VoyagerDevice.IsPresent() )
 			{
 				if ( XRSettings.enabled )
@@ -504,19 +485,6 @@ namespace Positron
 					Debug.LogWarning("Recieved OnVoyagerRecenterHMD() 'Recenter' callback when UnityEngine.XR is disabled.");
 				}
 			}
-			#else
-			if ( XRDevice.isPresent )
-			{
-				if ( XRSettings.enabled )
-				{
-					TryRecenter();
-				}
-				else
-				{
-					Debug.LogWarning("Recieved OnVoyagerRecenterHMD() 'Recenter' callback when UnityEngine.XR is disabled.");
-				}
-			}
-			#endif
 		}
 
 		void OnVoyagerUserPresentToggle(bool InValue)

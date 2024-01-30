@@ -61,7 +61,6 @@ namespace Positron
 			// Init HMD
 			if ( XRSettings.enabled )
 			{
-				#if UNITY_2019_3_OR_NEWER
 				if ( VoyagerDevice.IsPresent())
 				{
 					List<XRInputSubsystem> xrInputSubsystems = new List<XRInputSubsystem>();
@@ -75,13 +74,6 @@ namespace Positron
 						}
 					}
 				}
-				#else
-				if ( XRDevice.isPresent )
-				{
-					XRDevice.SetTrackingSpaceType(TrackingSpaceType.Stationary);
-					InputTracking.Recenter();
-				}
-				#endif
 			}
 		}
 

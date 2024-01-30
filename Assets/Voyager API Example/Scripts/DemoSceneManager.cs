@@ -1,11 +1,7 @@
 ﻿/* Copyright Positron 2017 - 2018 - Code by Brad Nelson */
 
-using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Positron
 {

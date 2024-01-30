@@ -1,6 +1,25 @@
 # ALPHA Voyager API Unity3d Tester & Source
 
 ---------------------------------------------------------------------------
+## Initial Setup and Dependencies 
+For new projects, make sure run in background is enabled in resolution: player settings.
+
+<span style="color:red">**Before**</span> importing VoyagerAPI.unitypackage your project must have the following packages installed or enabled for the test scenes to work
+
+|Package Name 
+|--------------------------       |
+|com.unity.ugui			          |Unity UI
+|com.unity.xr.interaction.toolkit |XR Interaction Toolkit
+|com.unity.inputsystem	          |Input System
+
+To add them: Window, Package Manager, switch the top left dropdown to packages: Unity Registry, search by name. 
+
+XR Interaction toolkit will likely be reverted to gaze only for simplification.
+
+### Setup for Android
+For new projects make sure you have enabled XR Plug-in Management or followed the setup guide for your device, otherwise the test scenes will run like a phone app.
+![VoyagerManager Properties](Docs/XRPlug-inManagement.png)
+Quest 3: https://developer.oculus.com/documentation/unity/unity-tutorial-hello-vr/#step-6-run-unity-project-setup-tool
 
 ## Key Classes & Scenes
 
@@ -26,11 +45,12 @@ _Class_ VoyagerAPI/Scripts/VoyagerManager.cs
 
 ## Important notes about this alpha
 
-### Connections
-Only 127.0.0.1:61557 is currently supported, don't use custom config files yet. The separate utility app will currently only connect on port 61557. 
+### Connections/custom config files 
+Remote/wireless ips have been tested working with Quest 3 for development. Only use port 61557 for now. The separate utility app will currently only connect on port 61557. 
 
 ### Connecting/disconnecting
-This still needs to be tested further, but it has been tested in Voyager API Test.unity
+This still needs to be refined and tested further, but it has been tested in Voyager API Test.unity (VoyagerAPITest.cs) 
+Voyager Demo.unity (VoyagerManager.cs) has had initial setup done. 
 
 ---------------------------------------------------------------------------
 
@@ -214,10 +234,11 @@ Key 				| Command
 
 ## Device Settings Config
 
-Using an ip other than 127.0.0.1 is untested/unsupported
-Using a port other than 61557 will not work because the utility app listens on this port.
+Use only port 61557. The utility app currently listens on this port only.
 
-onScreenLogs is not implemented
+A wireless connection has been confirmed working with Quest 3 - for development purposes only.
+
+onScreenLogs is not implemented in the Unity SDK
 
 If you wish to load _VoyagerDeviceConfig_ settings from a config-file, do the following:
 
@@ -274,7 +295,9 @@ You can edit your config-file(s) without having to rebuild ( assuming you did st
 
 For Android, the config loading system will use the  `'/storage/emulated/0/Android/data/<packagename>/files/<ConfigDir>/...'` path for your configs.
 
-You can use the provided script `BatchScripts/Push_DeviceConfig.bat` to push your config file(s) to the _Go_ through ADB. This allows you to test different network settings without having to re-deploy the app.
+You can use the provided script `BatchScripts/Push_DeviceConfig.bat` to push your config file(s) to the _Quest 3_ through ADB. This allows you to test different network settings without having to re-deploy the app.
+
+This batch file also sets permissions with adb shell chmod on the config folder and file, which was necessary in testing. 
 
 </br>
 
@@ -292,7 +315,7 @@ Povides a working example of how to initialize a VoyagerDevice
 
 **Voyager API Test.unity**
 
-A simple test scene for the API. UI buttons make API calls to the VoyagerDevice Instance. UI Tested with with mouse and Quest 3 right controller
+A simple test scene for the API. UI buttons make API calls to the VoyagerDevice Instance. UI Tested with with mouse, gaze, and Quest 3 right controller
 
 ---------------------------------------------------------------------------
 

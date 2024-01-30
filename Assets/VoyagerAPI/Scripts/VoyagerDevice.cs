@@ -10,7 +10,7 @@ namespace Positron
 {
 	public static class VoyagerDefaults
 	{
-		public const string apiVersion = "2.0.0-alpha";
+		public const string apiVersion = "2.0.1-alpha";
 
 		// Connection defaults
 		public const string localHostIP = "127.0.0.1";
@@ -248,7 +248,6 @@ namespace Positron
 			get{ return _motionProfile; }
 		}
 
-		#if UNITY_2019_3_OR_NEWER
 		// xrDisplaySubsystems = List<XRDisplaySubsystem>, used to track user presence
 		static private List<XRDisplaySubsystem> _xrDisplaySubsystems = new List<XRDisplaySubsystem>();
 		static public List<XRDisplaySubsystem> xrDisplaySubsystems
@@ -262,7 +261,6 @@ namespace Positron
 		static private List<InputDevice> inputDevices = new List<InputDevice>();
 		static private bool hasSixDof = false;
 		static private InputTrackingState inputTrackingState;
-		#endif
 
 		// Call in Awake to initialize the Device-Interface correctly. 
 		public static void Init(VoyagerDeviceConfig config)
@@ -955,7 +953,6 @@ namespace Positron
 
 		public static bool IsPresent()
 		{
-			#if UNITY_2019_3_OR_NEWER
 			_xrDisplaySubsystems.Clear();
 			SubsystemManager.GetInstances<XRDisplaySubsystem>(_xrDisplaySubsystems);
 			foreach (var xrDisplay in _xrDisplaySubsystems)
@@ -966,13 +963,9 @@ namespace Positron
 				}
 			}
 			return false;
-			#else
-			return XRDevice.isPresent && (XRDevice.userPresence == UserPresenceState.Present);
-			#endif
 		}
 
 		public static bool SixDofPresence() {
-			#if UNITY_2019_3_OR_NEWER
 			inputDevices.Clear();
 			InputDevices.GetDevicesWithCharacteristics(sixDofFilter, inputDevices);
 
@@ -996,9 +989,6 @@ namespace Positron
 			}
 
 			return false;
-			#else
-			return WorldManager.state == PositionalLocatorState.Active;
-			#endif
 		}
 
 		private void Update()
