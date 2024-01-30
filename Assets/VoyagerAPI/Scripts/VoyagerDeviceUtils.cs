@@ -102,8 +102,12 @@ namespace Positron
 		 * Windows build uses Application.streamingAssetsPath - Ex: VoyagerDemo\VoyagerDemo_Data\StreamingAssets\Config\VoyagerDevice.json
 		 *
 		 * Editor uses Application.streamingAssetsPath - Ex: VoyagerDemo\Assets\StreamingAssets\Config\VoyagerDevice.json
+		 * 
+		 * Android note: if using adb push to set config files, be sure to update permissions with chmod to at least 555 for CONFIG_DIRNAME and 444 for CONFIG_FILENAME
+		 * File.Exists will return false if there is not sufficient user permissions, even if READ_EXTERNAL_STORAGE is properly granted
+		 * 
 		 */
-		public static VoyagerDeviceConfig LoadDeviceConfigFile(string dirName, string fileName, VoyagerDeviceConfigId settingId = VoyagerDeviceConfigId.VDC_Default)
+        public static VoyagerDeviceConfig LoadDeviceConfigFile(string dirName, string fileName, VoyagerDeviceConfigId settingId = VoyagerDeviceConfigId.VDC_Default)
 		{
 			VoyagerDeviceConfig result = new VoyagerDeviceConfig();
 			string configPath = Path.Combine(dirName, fileName);
