@@ -1,5 +1,6 @@
 # ALPHA Voyager API Unity3d Tester & Source
 
+Please use the latest release when intergating in to your project > [Releases](https://github.com/PositronicSoftware/VoyagerAPI-Unity3d/releases).
 ---------------------------------------------------------------------------
 ## Initial Setup and Dependencies 
 For new projects, make sure run in background is enabled in resolution: player settings.
@@ -14,11 +15,11 @@ For new projects, make sure run in background is enabled in resolution: player s
 
 To add them: Window, Package Manager, switch the top left dropdown to packages: Unity Registry, search by name. 
 
-XR Interaction toolkit will likely be reverted to gaze only for simplification.
-
 ### Setup for Android
-For new projects make sure you have enabled XR Plug-in Management or followed the setup guide for your device, otherwise the test scenes will run like a phone app.
+For new projects make sure you have enabled XR Plug-in Management or follow the setup guide for your device, otherwise the test scenes will run like a phone app.
+
 ![VoyagerManager Properties](Docs/XRPlug-inManagement.png)
+
 Quest 3: https://developer.oculus.com/documentation/unity/unity-tutorial-hello-vr/#step-6-run-unity-project-setup-tool
 
 ## Key Classes & Scenes
@@ -49,8 +50,8 @@ _Class_ VoyagerAPI/Scripts/VoyagerManager.cs
 Remote/wireless ips have been tested working with Quest 3 for development. Only use port 61557 for now. The separate utility app will currently only connect on port 61557. 
 
 ### Connecting/disconnecting
-This still needs to be refined and tested further, but it has been tested in Voyager API Test.unity (VoyagerAPITest.cs) 
-Voyager Demo.unity (VoyagerManager.cs) has had initial setup done. 
+This still needs to be refined and tested further in coordination with PSM updates. t has been tested in Voyager API Test.unity (VoyagerAPITest.cs) 
+Voyager Demo.unity (VoyagerManager.cs) has had initial setup and testing done. 
 
 ---------------------------------------------------------------------------
 
@@ -156,10 +157,20 @@ private void OnConnected()
 
 	// Experience should start in Paused state.
 	VoyagerDevice.Pause();
+
+	// If you are not making a player:
+
+	// Set the Content ID.
+	VoyagerDevice.LoadContent("C:/ExecutableName.exe");
+	
+	// Notify PSM when loading is complete.
+	VoyagerDevice.Loaded(true);
+
+	// Set the initial Motion Profile track name.
+	VoyagerDevice.SetMotionProfile("TestProfile");
 }
 
-
-// If you are creating a player, respond to psm events to change content. Otherwise these calls can go into OnConnected
+// If you are creating a player, respond to PSM events to change content. You can remove these calls from OnConnected.
 private void OnVoyagerContentChange(string inUrl)
 {
 	// Set the Content ID.
