@@ -579,7 +579,13 @@ namespace Positron
 			}
 
 			// ~===============================================
-			// Send Experience Time to PSM.
+			// Update and Send Experience Time to PSM.
+
+			// Handle special case that could cause drift if moved into optimization
+			if (VoyagerDevice.PlayState == VoyagerDevicePlayState.Play && timelineControl == null)
+			{
+				experienceTime += Time.deltaTime;
+			}
 
 			int tickNum = Time.frameCount;
 			if( !optimizeSendTime || (tickNum % voyagerSendTimeInterval) == 0 )
@@ -590,7 +596,6 @@ namespace Positron
 					{
 						if( timelineControl == null )
 						{
-							experienceTime += Time.deltaTime;
 							VoyagerDevice.SendTimeSeconds(experienceTime);
 						}
 						else

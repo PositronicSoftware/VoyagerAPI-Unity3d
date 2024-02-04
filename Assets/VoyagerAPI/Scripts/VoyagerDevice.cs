@@ -311,7 +311,10 @@ namespace Positron
 		{
 			Debug.Log("VoyagerDevice >> Telepathy Event: Client Disconnected");
 
-			OnDisconnected?.Invoke(); 
+            // Reset last received packet since if PSM has restarted it will start at 0 again.
+            lastRecvPacketId = -1;
+
+            OnDisconnected?.Invoke(); 
 
 			if(reconnectCoroutine == null)
 			{
@@ -328,8 +331,8 @@ namespace Positron
 					Debug.Log("VoyagerDevice >> Attempting to reconnect to: " + Config.ipAddr + " "+ Config.portNum);
 					client.Connect(Config.ipAddr, Config.portNum);
 				}
-                yield return new WaitForSeconds(1.0f);
-			}
+				yield return new WaitForSecondsRealtime(2.0f);
+            }
 			reconnectCoroutine = null;
         }
 
