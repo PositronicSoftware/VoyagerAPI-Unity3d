@@ -310,6 +310,15 @@ You can use the provided script `BatchScripts/Push_DeviceConfig.bat` to push you
 
 This batch file also sets permissions with adb shell chmod on the config folder and file, which was necessary in testing. 
 
+**Working Quest 3 settings** (other settings may work): API Target 29, write permission external (sdcard)
+Additional AndroidManifest.xml settings:
+```xml
+<application android:requestLegacyExternalStorage="true">
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+```
+See Assets/Plugins/Android/AndroidManifest.xml 
+
 </br>
 
 > See the Example Project for a working implementation of this in 'VoyagerAPITest.cs', in the `Awake()` method.
