@@ -956,17 +956,14 @@ namespace Positron
 
 		public static bool IsPresent()
 		{
-			_xrDisplaySubsystems.Clear();
-			SubsystemManager.GetInstances<XRDisplaySubsystem>(_xrDisplaySubsystems);
-			foreach (var xrDisplay in _xrDisplaySubsystems)
+			bool isUserPresent = false;
+			InputDevice headset = InputDevices.GetDeviceAtXRNode(XRNode.Head);
+			if (headset.isValid)
 			{
-				if (xrDisplay.running)
-				{
-					return true;
-				}
+				headset.TryGetFeatureValue(CommonUsages.userPresence, out isUserPresent);
 			}
-			return false;
-		}
+			return isUserPresent;
+        }
 
 		public static bool SixDofPresence() {
 			inputDevices.Clear();

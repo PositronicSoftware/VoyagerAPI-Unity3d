@@ -1,10 +1,9 @@
 /* Copyright 2017 Positron code by Brad Nelson */
 
 using System.Collections;
-using System.Collections.Generic;
+using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.XR;
 
 namespace Positron
 {
@@ -15,6 +14,8 @@ namespace Positron
 		public Text configText;
 		public Text deviceDataText;
 		public Text lastRecvDataText;
+
+		public XROrigin XROrigin;
 
 		// Simulated video/experience play head time.
 		private float experienceTime = 0.0f;
@@ -54,34 +55,12 @@ namespace Positron
 			VoyagerDevice.Stop();
 		}
 
-		void Awake()
-		{
-			DontDestroyOnLoad( this );
-
-			// Init HMD
-			if ( XRSettings.enabled )
-			{
-				if ( VoyagerDevice.IsPresent())
-				{
-					List<XRInputSubsystem> xrInputSubsystems = new List<XRInputSubsystem>();
-					SubsystemManager.GetInstances<XRInputSubsystem>(xrInputSubsystems);
-
-					for (int i = 0; i < xrInputSubsystems.Count; i++)
-					{
-						if (xrInputSubsystems[i] != null) {
-							xrInputSubsystems[i].TrySetTrackingOriginMode(TrackingOriginModeFlags.Device);
-							xrInputSubsystems[i].TryRecenter();
-						}
-					}
-				}
-			}
-		}
-
 		IEnumerator Start()
 		{
-			// Make sure we have an instance of the Positron interface before we do anything else
-			var voyagerDevice = VoyagerDevice.Instance;
-			if( voyagerDevice == null )
+
+            // Make sure we have an instance of the Positron interface before we do anything else
+            var voyagerDevice = VoyagerDevice.Instance;
+			if (voyagerDevice == null)
 			{
 				Debug.LogError("Failed to create VoyagerDevice Singleton.");
 				yield break;
@@ -93,52 +72,80 @@ namespace Positron
 			// Initialize interface
 			VoyagerDevice.Init(config);
 
-            // Quick Exit: Not initialized
-            if ( !VoyagerDevice.IsInitialized )
+			// Quick Exit: Not initialized
+			if (!VoyagerDevice.IsInitialized)
 			{
 				Debug.LogError("VoyagerDevice not initialized.");
 				yield break;
 			}
 
-            // Critical setup calls must be done when connected
-            VoyagerDevice.OnConnected += OnVoyagerConnected;
-            VoyagerDevice.OnDisconnected += OnVoyagerDisconnected;
+			// Setup calls must be done when connected
+			VoyagerDevice.OnConnected += OnVoyagerConnected;
+			VoyagerDevice.OnDisconnected += OnVoyagerDisconnected;
 			VoyagerDevice.OnContentChange += OnVoyagerContentChange;
-        }
-        private void OnVoyagerConnected()
-        {
-            // Set the Content Params.
-            VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
 
-            // Experience should start in Paused state.
-            VoyagerDevice.Pause();
 
-            configText.text = VoyagerDevice.Config.ToString();
-        }
+			VoyagerDevice.OnRecenter += OnVoyagerRecenter;
+			VoyagerDevice.OnUserPresentToggle += OnVoyagerUserPresentToggle;
+		}
 
-		private void OnVoyagerContentChange(string inUrl)
+		private void OnVoyagerConnected()
 		{
-            // Set the Content ID.
-            VoyagerDevice.LoadContent(inUrl);
+			// Set the Content Params.
+			VoyagerDevice.SetContent("Application", "Quest 3", "Voyager API Test", "1.0");
 
-            // Notify PSM that loading is complete.
-            VoyagerDevice.Loaded(true);
+			// Media players should start in Stopped state.
+			VoyagerDevice.Stop();
 
-            // Set the initial Motion Profile track name.
-            VoyagerDevice.SetMotionProfile("TestProfile");
-        }
+			configText.text = VoyagerDevice.Config.ToString();
+		}
+
+		private void OnVoyagerContentChange(string url)
+		{
+			// Set the Content ID. Send back the same url as a confirmation to avoid errors
+			VoyagerDevice.LoadContent(url);
+
+			// Notify PSM that loading is complete.
+			VoyagerDevice.Loaded(true);
+
+			// Set the initial Motion Profile track name.
+			VoyagerDevice.SetMotionProfile("TestProfile");
+		}
 
 		private void OnVoyagerDisconnected()
 		{
-            // Update the device state. This will log a warning since there is no connection.
-            VoyagerDevice.Pause();
+			// This will log a warning since there is no connection.
+			VoyagerDevice.Pause();
 
-            // Since there is a guard for IsConnected in Update, we need to call UpdateText otherwise the text won't reflect the current paused state.
-            UpdateText();
+			// Update UI to show the paused state.
+			UpdateText();
+		}
+
+		private void OnVoyagerRecenter()
+		{
+			// Quest 3 apps running on android (vs link) only allow recentering from a user. Any recenter api calls are no-op. 
+			// (https://forum.unity.com/threads/xr-recenter-not-working-in-oculus-quest-2.1129019/#post-7268662)
+
+			// Undo any y rotation 
+			float currentYRotation = Camera.main.transform.eulerAngles.y;
+			XROrigin.transform.Rotate(0, -currentYRotation, 0);
+		}
+
+
+		private void OnVoyagerUserPresentToggle(bool isUserPresent)
+		{
+			// Adjust height when user puts on headset
+			if (isUserPresent) 
+			{
+				Vector3 cameraPosition = XROrigin.Camera.transform.localPosition;
+				XROrigin.Origin.transform.position = new Vector3(0, -cameraPosition.y, 0);
+			}
         }
 
         private void OnDestroy()
         {
+			VoyagerDevice.OnUserPresentToggle -= OnVoyagerUserPresentToggle;
+			VoyagerDevice.OnRecenter -= OnVoyagerRecenter;
 			VoyagerDevice.OnConnected -= OnVoyagerConnected;
             VoyagerDevice.OnDisconnected -= OnVoyagerDisconnected;
 			VoyagerDevice.OnContentChange -= OnVoyagerContentChange;
@@ -211,11 +218,8 @@ namespace Positron
 
 				case VoyagerDevicePlayState.Stop:
 				{
-					if( !Mathf.Approximately(experienceTime, 0.0f))
-					{
-						experienceTime = 0.0f;
-						VoyagerDevice.SendTimeSeconds(0.0f);
-					}
+					experienceTime = 0.0f;
+					VoyagerDevice.SendTimeSeconds(experienceTime);
 					break;
 				}
 			}
