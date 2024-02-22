@@ -10,7 +10,7 @@ namespace Positron
 {
 	public static class VoyagerDefaults
 	{
-		public const string apiVersion = "2.0.2-alpha";
+		public const string apiVersion = "2.1.0";
 
 		// Connection defaults
 		public const string localHostIP = "127.0.0.1";
@@ -993,6 +993,8 @@ namespace Positron
 
 		private void Update()
 		{
+            // API users might poll for IsUpdated to detect changes that don't have events, but an event in ReceiveData might be better in a refactor.
+            // client.Tick could fire ReceiveData if it has data, which could set _isUpdated to true 
             _isUpdated = false;
 			client.Tick(100);
 

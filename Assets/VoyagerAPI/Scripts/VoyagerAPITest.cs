@@ -3,6 +3,7 @@
 using System.Collections;
 using Unity.XR.CoreUtils;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace Positron
@@ -15,7 +16,7 @@ namespace Positron
 		public Text deviceDataText;
 		public Text lastRecvDataText;
 
-		public XROrigin XROrigin;
+		public XROrigin xrOrigin;
 
 		// Simulated video/experience play head time.
 		private float experienceTime = 0.0f;
@@ -91,11 +92,20 @@ namespace Positron
 
 		private void OnVoyagerConnected()
 		{
-			// Set the Content Params.
-			VoyagerDevice.SetContent("Application", "Quest 3", "Voyager API Test", "1.0");
+			// Reconnect
+			if(VoyagerDevice.IsContentLoaded)
+			{
+				VoyagerDevice.Pause();
+				return;
+			}
 
-			// Media players should start in Stopped state.
-			VoyagerDevice.Stop();
+            // Initial connection
+
+            // Set the Content Params.
+            VoyagerDevice.SetContent("Application", "Quest 3", "Voyager API Test", "1.0");
+
+            // Media players should start in Stopped state.
+            VoyagerDevice.Stop();
 
 			configText.text = VoyagerDevice.Config.ToString();
 		}
@@ -123,13 +133,13 @@ namespace Positron
 
 		private void OnVoyagerRecenter()
 		{
-			// Quest 3 apps running on android (vs link) only allow recentering from a user. Any recenter api calls are no-op. 
-			// (https://forum.unity.com/threads/xr-recenter-not-working-in-oculus-quest-2.1129019/#post-7268662)
+            // Quest 3 apps running on android standalone (not Quest Link) only allow recentering from a user. Any recenter api calls are no-op. 
+            // (https://forum.unity.com/threads/xr-recenter-not-working-in-oculus-quest-2.1129019/#post-7268662)
 
-			// Undo any y rotation 
-			float currentYRotation = Camera.main.transform.eulerAngles.y;
-			XROrigin.transform.Rotate(0, -currentYRotation, 0);
-		}
+            // Undo any y rotation 
+            float currentYRotation = Camera.main.transform.eulerAngles.y;
+            xrOrigin.transform.Rotate(0, -currentYRotation, 0);
+        }
 
 
 		private void OnVoyagerUserPresentToggle(bool isUserPresent)
@@ -137,8 +147,8 @@ namespace Positron
 			// Adjust height when user puts on headset
 			if (isUserPresent) 
 			{
-				Vector3 cameraPosition = XROrigin.Camera.transform.localPosition;
-				XROrigin.Origin.transform.position = new Vector3(0, -cameraPosition.y, 0);
+				Vector3 cameraPosition = xrOrigin.Camera.transform.localPosition;
+				xrOrigin.Origin.transform.position = new Vector3(0, -cameraPosition.y, 0);
 			}
         }
 
@@ -149,7 +159,6 @@ namespace Positron
 			VoyagerDevice.OnConnected -= OnVoyagerConnected;
             VoyagerDevice.OnDisconnected -= OnVoyagerDisconnected;
 			VoyagerDevice.OnContentChange -= OnVoyagerContentChange;
-
         }
 
         void Update()
@@ -159,16 +168,16 @@ namespace Positron
 				return;
 			}
 
-			// Recenter for Oculus Remote DPad
-			if( Input.GetAxis("Vertical") >= 1.0f )
+			// Recenter for Oculus Remote DPad or Quest 3 B button
+			if( Input.GetAxis("Vertical") >= 1.0f || Input.GetKeyDown(KeyCode.JoystickButton1))
 			{
 				Recenter();
 			}
 
-			// ~===============================================
-			// Key Commands
+            // ~===============================================
+            // Key Commands
 
-			if( Input.GetKeyDown( KeyCode.Space ))		// Play-Pause
+            if ( Input.GetKeyDown( KeyCode.Space ))		// Play-Pause
 			{
 				VoyagerDevice.PlayPause();
 			}

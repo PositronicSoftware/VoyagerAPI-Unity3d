@@ -3,6 +3,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.XR;
 
@@ -19,11 +20,10 @@ namespace Positron
 		// State to initialize the Voyager API in.
 		public VoyagerMangerStartMode startMode = VoyagerMangerStartMode.StartPaused;
 
-		// Tracking space types, Stationary generally refers to the Device tracking origin mode, 
-		// and RoomScale generally refers to Floor tracking origin mode, but it can depend somewhat on the intricacies of the SDK
-		public TrackingOriginModeFlags XRSpace = TrackingOriginModeFlags.Device;
+        [Tooltip("Assign the reference to xr origin from your scene, also sets tracking mode.")]
+        public XROrigin xrOrigin;
 
-		[Header("Content Path")]
+        [Header("Content Path")]
 		public bool singleExperienceExecutable = false;
 		
 		[ SerializeField, Tooltip("Path for this application's executable, if it's a single experience executable")]
@@ -54,10 +54,13 @@ namespace Positron
 		private float lastTrackSwitchDelay = 1f;
 
 		static private List<XRInputSubsystem> xrInputSubsystems = new List<XRInputSubsystem>();
-		static private bool recenteredHMD = false;
 
-		// Fade in the screen
-		public void ScreenFadeIn()
+		// Used to restore the PlayState after losing connection
+		private VoyagerDevicePlayState disconnectedState;
+		private bool lostConnection = false;
+
+        // Fade in the screen
+        public void ScreenFadeIn()
 		{
 			if( screenFader != null )
 			{
@@ -103,10 +106,6 @@ namespace Positron
 		// Recenter the HMD
 		public void Recenter()
 		{
-			recenteredHMD = TryRecenter();
-			if (!recenteredHMD) {
-				Debug.LogWarning("HMD not recentered, try again");
-			}
 			VoyagerDevice.Recenter();
 		}
 
@@ -247,6 +246,18 @@ namespace Positron
 				return false;
 			}
 
+            // Quest 3 apps running on android standalone (not Quest Link) only allow recentering from a user. Any recenter api calls are no-op. 
+            // (https://forum.unity.com/threads/xr-recenter-not-working-in-oculus-quest-2.1129019/#post-7268662)
+
+            // Undo any y rotation 
+            if (Application.platform == RuntimePlatform.Android)
+			{
+				float currentYRotation = Camera.main.transform.eulerAngles.y;
+				xrOrigin.transform.Rotate(0, -currentYRotation, 0);
+
+				return true;
+			}
+	
 			if ( VoyagerDevice.IsPresent())
 			{
 				bool recentered = false;
@@ -257,7 +268,7 @@ namespace Positron
 				{
 					bool tryRecenter = false;
 					if (xrInputSubsystems[i] != null) {
-						xrInputSubsystems[i].TrySetTrackingOriginMode(XRSpace);
+						xrInputSubsystems[i].TrySetTrackingOriginMode(xrOrigin.CurrentTrackingOriginMode);
 						tryRecenter = xrInputSubsystems[i].TryRecenter();
 					}
 
@@ -335,10 +346,39 @@ namespace Positron
             VoyagerDevice.OnConnected += OnVoyagerConnected;
             VoyagerDevice.OnDisconnected += OnVoyagerDisconnected;
             VoyagerDevice.OnContentChange += OnVoyagerContentChange;
+
+            VoyagerDevice.OnUserPresentToggle += OnVoyagerUserPresentToggle;
         }
         
 		private void OnVoyagerConnected()
 		{
+			// Reconnect:
+            if (lostConnection)
+            {
+                switch(disconnectedState)
+				{
+					case VoyagerDevicePlayState.Play:
+						VoyagerDevice.Play();
+						break;
+					case VoyagerDevicePlayState.Pause:
+						VoyagerDevice.Pause();
+						break;
+					case VoyagerDevicePlayState.Stop:
+						VoyagerDevice.Stop();
+						break;
+					case VoyagerDevicePlayState.Idle:
+						VoyagerDevice.Idle();
+						break;
+					default:
+						Debug.LogError("Unhandled state " + disconnectedState);
+						break;
+				}
+				lostConnection = false;
+				return;
+            }
+			
+			// Initial connection:
+
             // Set the Content Params.
             VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
 
@@ -400,8 +440,16 @@ namespace Positron
 
         private void OnVoyagerDisconnected()
         {
-            // Update the device state. This will log a warning since there is no connection.
-            VoyagerDevice.Pause();
+            // Additional connection state tracking (lostConnection) is necessary because the disconnected event could fire many times while reconnecting and disconnected state could get overwritten
+            if (!lostConnection)
+			{
+				// Store the state when disconnecting for the first time after losing a connection
+				disconnectedState = VoyagerDevice.PlayState;
+				
+				// This will log a warning since there is no connection
+				VoyagerDevice.Pause();
+				lostConnection = true;
+			}
         }
 
         void OnVoyagerPlayStateChange( VoyagerDevicePlayState InState )
@@ -467,16 +515,14 @@ namespace Positron
 		{
 			AudioListener.volume = InValue ? 0f : 1f;
 		}
-
-		void OnVoyagerRecenterHMD()
+        void OnVoyagerRecenterHMD()
 		{
 			if ( VoyagerDevice.IsPresent() )
 			{
 				if ( XRSettings.enabled )
 				{
-					recenteredHMD = TryRecenter();
-
-					if (!recenteredHMD) {
+					if (!TryRecenter()) 
+					{
 						Debug.LogWarning("HMD not recentered, try again");
 					}
 				}
@@ -485,12 +531,20 @@ namespace Positron
 					Debug.LogWarning("Recieved OnVoyagerRecenterHMD() 'Recenter' callback when UnityEngine.XR is disabled.");
 				}
 			}
-		}
+        }
 
 		void OnVoyagerUserPresentToggle(bool InValue)
 		{
-			if( InValue )
+
+            if ( InValue )
 			{
+				// Adjust height when user puts on headset, see TryRecenter for more information
+				if (Application.platform == RuntimePlatform.Android)
+				{
+					Vector3 cameraPosition = xrOrigin.Camera.transform.localPosition;
+					xrOrigin.Origin.transform.position = new Vector3(0, -cameraPosition.y, 0);
+				}
+
 				Debug.Log("Recieved OnVoyagerUserPresentToggle() with 'UserPresent' TRUE.");
 			}
 			else
@@ -518,11 +572,11 @@ namespace Positron
 				return;
 			}
 
-			// ~===============================================
-			// Oculus Commands
+            // ~===============================================
+            // Oculus Commands
 
-			// Recenter for Oculus Remote DPad
-			if( Input.GetAxis("Vertical") >= 1.0f )
+            // Recenter for Oculus Remote DPad or Quest 3 B button
+            if ( Input.GetAxis("Vertical") >= 1.0f || Input.GetKeyDown(KeyCode.JoystickButton1))
 			{
 				Recenter();
 			}
