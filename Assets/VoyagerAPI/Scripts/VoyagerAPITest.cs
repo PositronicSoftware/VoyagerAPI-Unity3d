@@ -3,8 +3,8 @@
 using System.Collections;
 using Unity.XR.CoreUtils;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.UI;
+using UnityEngine.XR.Interaction.Toolkit;
 
 namespace Positron
 {
@@ -17,6 +17,9 @@ namespace Positron
 		public Text lastRecvDataText;
 
 		public XROrigin xrOrigin;
+
+		public TeleportationAnchor anchor;
+		public TeleportationProvider provider; 
 
 		// Simulated video/experience play head time.
 		private float experienceTime = 0.0f;
@@ -85,9 +88,9 @@ namespace Positron
 			VoyagerDevice.OnDisconnected += OnVoyagerDisconnected;
 			VoyagerDevice.OnContentChange += OnVoyagerContentChange;
 
-
+			VoyagerDevice.OnPlay += OnVoyagerPlay;
+			
 			VoyagerDevice.OnRecenter += OnVoyagerRecenter;
-			VoyagerDevice.OnUserPresentToggle += OnVoyagerUserPresentToggle;
 		}
 
 		private void OnVoyagerConnected()
@@ -136,25 +139,35 @@ namespace Positron
             // Quest 3 apps running on android standalone (not Quest Link) only allow recentering from a user. Any recenter api calls are no-op. 
             // (https://forum.unity.com/threads/xr-recenter-not-working-in-oculus-quest-2.1129019/#post-7268662)
 
-            // Undo any y rotation 
-            float currentYRotation = Camera.main.transform.eulerAngles.y;
-            xrOrigin.transform.Rotate(0, -currentYRotation, 0);
+            // Two - Step Centering: Application centers position + orientation on command from PSM.
+            
+			Vector3 cameraPosition = xrOrigin.Camera.transform.localPosition;
+
+			TeleportRequest request = new TeleportRequest()
+			{
+				destinationPosition = new Vector3(0.0f, -cameraPosition.y, 0.0f),
+                destinationRotation = Quaternion.identity,
+				matchOrientation = MatchOrientation.TargetUpAndForward,
+			};
+			provider.QueueTeleportRequest(request);
         }
 
-
-		private void OnVoyagerUserPresentToggle(bool isUserPresent)
+		private void OnVoyagerPlay()
 		{
-			// Adjust height when user puts on headset
-			if (isUserPresent) 
-			{
-				Vector3 cameraPosition = xrOrigin.Camera.transform.localPosition;
-				xrOrigin.Origin.transform.position = new Vector3(0, -cameraPosition.y, 0);
-			}
+            // Two - Step Centering: Application centers position on experience start(play ).
+
+            Vector3 cameraPosition = xrOrigin.Camera.transform.localPosition;
+
+            TeleportRequest request = new TeleportRequest()
+            {
+                destinationPosition = new Vector3(0.0f, -cameraPosition.y, 0.0f),
+                matchOrientation = MatchOrientation.None,
+            };
+            provider.QueueTeleportRequest(request);
         }
 
         private void OnDestroy()
         {
-			VoyagerDevice.OnUserPresentToggle -= OnVoyagerUserPresentToggle;
 			VoyagerDevice.OnRecenter -= OnVoyagerRecenter;
 			VoyagerDevice.OnConnected -= OnVoyagerConnected;
             VoyagerDevice.OnDisconnected -= OnVoyagerDisconnected;
