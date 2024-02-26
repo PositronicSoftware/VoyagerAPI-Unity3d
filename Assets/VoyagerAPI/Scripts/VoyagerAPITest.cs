@@ -18,8 +18,9 @@ namespace Positron
 
 		public XROrigin xrOrigin;
 
-		public TeleportationAnchor anchor;
-		public TeleportationProvider provider; 
+        // Used to properly set the rotation and position during recenter
+        private TeleportationProvider teleportationProvider;
+		private LocomotionSystem locomotionSystem;
 
 		// Simulated video/experience play head time.
 		private float experienceTime = 0.0f;
@@ -57,6 +58,15 @@ namespace Positron
 		public void Stop()
 		{
 			VoyagerDevice.Stop();
+		}
+
+		private void Awake()
+		{
+			locomotionSystem = gameObject.AddComponent<LocomotionSystem>();
+			locomotionSystem.xrOrigin = xrOrigin;
+
+			teleportationProvider = gameObject.AddComponent<TeleportationProvider>();
+			teleportationProvider.system = locomotionSystem;
 		}
 
 		IEnumerator Start()
@@ -141,35 +151,36 @@ namespace Positron
 
             // Two - Step Centering: Application centers position + orientation on command from PSM.
             
-			Vector3 cameraPosition = xrOrigin.Camera.transform.localPosition;
+			float userHeightOffset  = xrOrigin.Camera.transform.localPosition.y;
 
 			TeleportRequest request = new TeleportRequest()
 			{
-				destinationPosition = new Vector3(0.0f, -cameraPosition.y, 0.0f),
+				destinationPosition = new Vector3(0.0f, -userHeightOffset, 0.0f),
                 destinationRotation = Quaternion.identity,
 				matchOrientation = MatchOrientation.TargetUpAndForward,
 			};
-			provider.QueueTeleportRequest(request);
+			teleportationProvider.QueueTeleportRequest(request);
         }
 
 		private void OnVoyagerPlay()
 		{
             // Two - Step Centering: Application centers position on experience start(play ).
-
-            Vector3 cameraPosition = xrOrigin.Camera.transform.localPosition;
+            
+			float userHeightOffset = xrOrigin.Camera.transform.localPosition.y;
 
             TeleportRequest request = new TeleportRequest()
             {
-                destinationPosition = new Vector3(0.0f, -cameraPosition.y, 0.0f),
+                destinationPosition = new Vector3(0.0f, -userHeightOffset, 0.0f),
                 matchOrientation = MatchOrientation.None,
             };
-            provider.QueueTeleportRequest(request);
+            teleportationProvider.QueueTeleportRequest(request);
         }
 
         private void OnDestroy()
         {
 			VoyagerDevice.OnRecenter -= OnVoyagerRecenter;
-			VoyagerDevice.OnConnected -= OnVoyagerConnected;
+            VoyagerDevice.OnPlay -= OnVoyagerPlay;
+            VoyagerDevice.OnConnected -= OnVoyagerConnected;
             VoyagerDevice.OnDisconnected -= OnVoyagerDisconnected;
 			VoyagerDevice.OnContentChange -= OnVoyagerContentChange;
         }
