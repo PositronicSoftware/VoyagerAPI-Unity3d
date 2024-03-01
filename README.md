@@ -1,26 +1,60 @@
-# ALPHA Voyager API Unity3d Tester & Source
+# Voyager API Unity3d Tester & Source
 
 Please use the latest release when intergating in to your project > [Releases](https://github.com/PositronicSoftware/VoyagerAPI-Unity3d/releases).
 ---------------------------------------------------------------------------
 ## Initial Setup and Dependencies 
-For new projects, make sure run in background is enabled in resolution: player settings.
 
-<span style="color:red">**Before**</span> importing VoyagerAPI.unitypackage your project must have the following packages installed or enabled for the test scenes to work
+**Before** importing VoyagerAPI.unitypackage your project must have the following packages installed for the test scenes to work.
 
 |Package Name 
 |--------------------------       |
-|com.unity.ugui			          |Unity UI
 |com.unity.xr.interaction.toolkit |XR Interaction Toolkit
+|com.unity.ugui			          |Unity UI
 |com.unity.inputsystem	          |Input System
 
 To add them: Window, Package Manager, switch the top left dropdown to packages: Unity Registry, search by name. 
 
-### Setup for Android
-For new projects make sure you have enabled XR Plug-in Management or follow the setup guide for your device, otherwise the test scenes will run like a phone app.
+For new projects, enable run in background in player settings, resolution.
+
+## Setup for Android
+Install XR Plug-in Management, otherwise the test scenes will run like a phone app.
 
 ![VoyagerManager Properties](Docs/XRPlug-inManagement.png)
 
-Quest 3: https://developer.oculus.com/documentation/unity/unity-tutorial-hello-vr/#step-6-run-unity-project-setup-tool
+## Quest 3 Project Setup 
+
+**User presence**
+
+Use the Oculus plug in provider in XR-Plugin management or this will be always true
+
+**Recentering**
+
+Any recenter API calls are no-op for Quest 3.
+https://forum.unity.com/threads/xr-recenter-not-working-in-oculus-quest-2.1129019/#post-7268662
+
+To recenter, move the XROrigin (or similiar rig) appropriately like a teleport to compensate for the rotation and position of the headset (camera)  
+See VoyagerAPITest.OnVoyagerRecenter for an example
+
+Disable system recenter from user presence by setting the origin tracking to stage mode.  
+1. Set the Tracking Origin Mode to floor in your rig in the scene
+2. In project settings, XR Plugin Management. Oculus, Android settings: check the box "Enable TrackingOrigin Stage Mode"
+
+**Sleep**
+
+Increase the time before sleep in Settings, System, Power from 15 seconds up to 4hrs to reduce the number of disconnects.
+
+**Meta setup guide**
+
+https://developer.oculus.com/documentation/unity/unity-tutorial-hello-vr/#step-6-run-unity-project-setup-tool
+
+If you choose to use the OVRCameraRig it means you have to re-implement recentering, see TeleportationProvider.Update
+
+## Positronic Standalone Headset Software (PSHS)
+
+PSHS must be running to connect with PSM.
+
+See the readme and download the latest release here:
+https://github.com/PositronicSoftware/Positronic-Standalone-Headset-Software
 
 ## Key Classes & Scenes
 
@@ -44,15 +78,6 @@ _Class_ VoyagerAPI/Scripts/VoyagerAPITest.cs
 _Scene_ Voyager API Example/Scenes/Voyager Demo.unity
 _Class_ VoyagerAPI/Scripts/VoyagerManager.cs
 
-## Important notes about this alpha
-
-### Connections/custom config files 
-Remote/wireless ips have been tested working with Quest 3 for development. Only use port 61557 for now. The separate utility app will currently only connect on port 61557. 
-
-### Connecting/disconnecting
-This still needs to be refined and tested further in coordination with PSM updates. t has been tested in Voyager API Test.unity (VoyagerAPITest.cs) 
-Voyager Demo.unity (VoyagerManager.cs) has had initial setup and testing done. 
-
 ---------------------------------------------------------------------------
 
 ## Using the API - Components
@@ -71,7 +96,7 @@ Now add the `VoyagerManager` and `TimelineControl` Components to this GameObject
 
 If in single experience executable mode:
 1. Check the single experience executable checkbox.
-2. `Path` should be set to your build executable path `"C:/ExecutableName.exe"` in the inspector.
+2. `Path` should be set to your build executable path `"C:\ExecutableName.exe"` in the inspector.
 
 In either mode single experience or player mode: 
 1. `Timeline Control` can be left null. It will be auto-set on Play if a TimelineControl component is detected.
@@ -105,7 +130,7 @@ This component is required if your project is using 1 or more `PlayableDirector`
 
 ## Using the API - CSharp
 
-VoyagerAPITest.cs and VoyagerManager.cs both have examples of using the API, however pay careful attention to Caveats in step 05
+VoyagerAPITest.cs and VoyagerManager.cs both have examples of using the API
 
 ### 01 | Construct and Init() a VoyagerDevice
 
@@ -114,7 +139,7 @@ var voyagerDevice = VoyagerDevice.Instance; // Init Singleton
 if( voyagerDevice == null )
 {
 	Debug.LogError("Failed to create VoyagerDevice Singleton.");
-	yield break;
+	return;
 }
 ```
 
@@ -131,7 +156,7 @@ VoyagerDevice.Init(config);
 if( !VoyagerDevice.IsInitialized )
 {
 	Debug.LogError("VoyagerDevice not initialized.");
-	yield break;
+	return;
 }
 ```
 ### 02 | Listen to Connect/Disconnect events 
@@ -155,10 +180,13 @@ private void OnConnected()
 	// Set the Content Params.
 	VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
 
-	// Experience should start in Paused state.
-	VoyagerDevice.Pause();
+	// Media players should start in Stopped state.
+    // VoyagerDevice.Stop();
 
 	// If you are not making a player:
+
+	// Experience should start in Paused state
+	VoyagerDevice.Pause();
 
 	// Set the Content ID.
 	VoyagerDevice.LoadContent("C:/ExecutableName.exe");
@@ -173,7 +201,7 @@ private void OnConnected()
 // If you are creating a player, respond to PSM events to change content. You can remove these calls from OnConnected.
 private void OnVoyagerContentChange(string inUrl)
 {
-	// Set the Content ID.
+	// Set the Content ID. Send back the same url as a confirmation to avoid errors
 	VoyagerDevice.LoadContent(inUrl);
 
 	// Notify PSM when loading is complete.
@@ -181,6 +209,9 @@ private void OnVoyagerContentChange(string inUrl)
 
 	// Set the initial Motion Profile track name.
 	VoyagerDevice.SetMotionProfile("TestProfile");
+
+	// Media Players should pause after changing content
+    VoyagerDevice.Pause();
 }
 
 ```
@@ -245,11 +276,7 @@ Key 				| Command
 
 ## Device Settings Config
 
-Use only port 61557. The utility app currently listens on this port only.
-
-A wireless connection has been confirmed working with Quest 3 - for development purposes only.
-
-onScreenLogs is not implemented in the Unity SDK
+Using a remote IP works with Quest 3, but it's for development purposes only and is not supported. You must also change the PSHS config file.
 
 If you wish to load _VoyagerDeviceConfig_ settings from a config-file, do the following:
 
@@ -321,7 +348,7 @@ See Assets/Plugins/Android/AndroidManifest.xml
 
 </br>
 
-> See the Example Project for a working implementation of this in 'VoyagerAPITest.cs', in the `Awake()` method.
+> See the Example Project for a working implementation of this in 'VoyagerAPITest.cs', in the `Start()` method.
 
 ---------------------------------------------------------------------------
 
@@ -331,15 +358,23 @@ This project implements a simple demo scene that shows you how to use VoyagerDev
 
 **VoyagerAPITest.cs**
 
-Povides a working example of how to initialize a VoyagerDevice
+Povides a working example of how to initialize a VoyagerDevice and how to reconnect/disconnect paused
 
 **Voyager API Test.unity**
 
-A simple test scene for the API. UI buttons make API calls to the VoyagerDevice Instance. UI Tested with with mouse, gaze, and Quest 3 right controller
+A simple test scene for the API, setup like a media player. UI buttons make API calls to the VoyagerDevice Instance. UI Tested with with mouse and gaze with Quest 3.
+
+Use https://github.com/PositronicSoftware/PositronicTester for testing and select a real mp4 file as content.
 
 ---------------------------------------------------------------------------
 
 ## Debugging
+Consider using PositronicTester before PSM because it doesn't check for haptics etc.
+
+For PSM check content. Make sure vmedia,vmotion,-haptics,mp4 are in the correct path on the PC side.  
+Example by default: C:\Positron\Media\Scent of a Song\Scent of a Song.vmedia, etc 
+
+Recentering from PSM also pauses. This is intended.
 
 **Windows**
 
