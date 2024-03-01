@@ -1,11 +1,7 @@
 ﻿/* Copyright Positron 2017 - 2018 - Code by Brad Nelson */
 
-using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Positron
 {
@@ -15,6 +11,14 @@ namespace Positron
 		public GameObject gazePoint;
 		public float shootForce;
 		public VRStandardAssets.Flyer.FlyerLaserController laserController;
+		public VoyagerManager voyagerManager;
+
+
+        public void OnClickStartGame()
+		{
+			voyagerManager.SetPlayableTrack(0);
+			voyagerManager.Play();
+        }
 
 		private void Awake()
 		{
@@ -23,7 +27,7 @@ namespace Positron
 
 		IEnumerator Start()
 		{
-			while( VoyagerDevice.Instance == null && !VoyagerDevice.IsInitialized )
+			while( VoyagerDevice.Instance == null && !VoyagerDevice.IsInitialized  && !VoyagerDevice.IsConnected)
 			{
 				yield return null;
 			}

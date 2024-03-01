@@ -1,10 +1,9 @@
 /* Copyright 2017 Positron code by Brad Nelson */
 
-using System.Collections;
-using System.Collections.Generic;
+using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.XR;
+using UnityEngine.XR.Interaction.Toolkit;
 
 namespace Positron
 {
@@ -15,6 +14,12 @@ namespace Positron
 		public Text configText;
 		public Text deviceDataText;
 		public Text lastRecvDataText;
+
+		public XROrigin xrOrigin;
+
+        // Used to set the rotation and position during recenter
+        private TeleportationProvider teleportationProvider;
+		private LocomotionSystem locomotionSystem;
 
 		// Simulated video/experience play head time.
 		private float experienceTime = 0.0f;
@@ -54,45 +59,24 @@ namespace Positron
 			VoyagerDevice.Stop();
 		}
 
-		void Awake()
+		private void Awake()
 		{
-			DontDestroyOnLoad( this );
+			locomotionSystem = gameObject.AddComponent<LocomotionSystem>();
+			locomotionSystem.xrOrigin = xrOrigin;
 
-			// Init HMD
-			if ( XRSettings.enabled )
-			{
-				#if UNITY_2019_3_OR_NEWER
-				if ( VoyagerDevice.IsPresent())
-				{
-					List<XRInputSubsystem> xrInputSubsystems = new List<XRInputSubsystem>();
-					SubsystemManager.GetInstances<XRInputSubsystem>(xrInputSubsystems);
-
-					for (int i = 0; i < xrInputSubsystems.Count; i++)
-					{
-						if (xrInputSubsystems[i] != null) {
-							xrInputSubsystems[i].TrySetTrackingOriginMode(TrackingOriginModeFlags.Device);
-							xrInputSubsystems[i].TryRecenter();
-						}
-					}
-				}
-				#else
-				if ( XRDevice.isPresent )
-				{
-					XRDevice.SetTrackingSpaceType(TrackingSpaceType.Stationary);
-					InputTracking.Recenter();
-				}
-				#endif
-			}
+			teleportationProvider = gameObject.AddComponent<TeleportationProvider>();
+			teleportationProvider.system = locomotionSystem;
 		}
 
-		IEnumerator Start()
+		private void Start()
 		{
-			// Make sure we have an instance of the Positron interface before we do anything else
-			var voyagerDevice = VoyagerDevice.Instance;
-			if( voyagerDevice == null )
+
+            // Make sure we have an instance of the Positron interface before we do anything else
+            var voyagerDevice = VoyagerDevice.Instance;
+			if (voyagerDevice == null)
 			{
 				Debug.LogError("Failed to create VoyagerDevice Singleton.");
-				yield break;
+				return;
 			}
 
 			// Load config from file
@@ -102,47 +86,124 @@ namespace Positron
 			VoyagerDevice.Init(config);
 
 			// Quick Exit: Not initialized
-			if( !VoyagerDevice.IsInitialized )
+			if (!VoyagerDevice.IsInitialized)
 			{
 				Debug.LogError("VoyagerDevice not initialized.");
-				yield break;
+				return;
 			}
 
-			// Set the Content Params.
-			VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
+			// Setup calls must be done when connected
+			VoyagerDevice.OnConnected += OnVoyagerConnected;
+			VoyagerDevice.OnDisconnected += OnVoyagerDisconnected;
+			VoyagerDevice.OnContentChange += OnVoyagerContentChange;
 
-			// Experience should start in Paused state.
-			VoyagerDevice.Pause();
+			VoyagerDevice.OnPlay += OnVoyagerPlay;
+			
+			VoyagerDevice.OnRecenter += OnVoyagerRecenter;
+		}
 
-			// Set the Content ID.
-			VoyagerDevice.LoadContent("file:///C:/Test/Test.mp4");
+		private void OnVoyagerConnected()
+		{
+			// Reconnect
+			if(VoyagerDevice.IsContentLoaded)
+			{
+				VoyagerDevice.Pause();
+				return;
+			}
+
+            // Initial connection
+
+            // Set the Content Params.
+            VoyagerDevice.SetContent("Application", "Quest 3", "Voyager API Test", "1.0");
+
+            // Media players should start in Stopped state.
+            VoyagerDevice.Stop();
+
+			configText.text = VoyagerDevice.Config.ToString();
+		}
+
+		private void OnVoyagerContentChange(string url)
+		{
+			// Set the Content ID. Send back the same url as a confirmation to avoid errors
+			VoyagerDevice.LoadContent(url);
 
 			// Notify PSM that loading is complete.
 			VoyagerDevice.Loaded(true);
 
 			// Set the initial Motion Profile track name.
-			VoyagerDevice.SetMotionProfile( "TestProfile" );
+			VoyagerDevice.SetMotionProfile("TestProfile");
 
-			configText.text = VoyagerDevice.Config.ToString();
+			// Media Players should pause after changing content
+            VoyagerDevice.Pause();
+        }
+
+		private void OnVoyagerDisconnected()
+		{
+			// Logs a warning since there is no connection.
+			VoyagerDevice.Pause();
+
+			// Update UI to show the paused state.
+			UpdateText();
 		}
 
-		void Update()
+		private void OnVoyagerRecenter()
 		{
-			if( VoyagerDevice.Instance == null || !VoyagerDevice.IsInitialized )
+            // Quest 3 apps running on android standalone (not Quest Link) only allow recentering from a user. Any recenter api calls are no-op. 
+            // (https://forum.unity.com/threads/xr-recenter-not-working-in-oculus-quest-2.1129019/#post-7268662)
+
+            // Two - Step Centering: Application centers position + orientation on command from PSM.
+            
+			float userHeightOffset  = xrOrigin.Camera.transform.localPosition.y;
+
+			TeleportRequest request = new TeleportRequest()
+			{
+				destinationPosition = new Vector3(0.0f, -userHeightOffset, 0.0f),
+                destinationRotation = Quaternion.identity,
+				matchOrientation = MatchOrientation.TargetUpAndForward,
+			};
+			teleportationProvider.QueueTeleportRequest(request);
+        }
+
+		private void OnVoyagerPlay()
+		{
+            // Two - Step Centering: Application centers position on experience start(play ).
+            
+			float userHeightOffset = xrOrigin.Camera.transform.localPosition.y;
+
+            TeleportRequest request = new TeleportRequest()
+            {
+                destinationPosition = new Vector3(0.0f, -userHeightOffset, 0.0f),
+                matchOrientation = MatchOrientation.None,
+            };
+            teleportationProvider.QueueTeleportRequest(request);
+        }
+
+        private void OnDestroy()
+        {
+			VoyagerDevice.OnRecenter -= OnVoyagerRecenter;
+            VoyagerDevice.OnPlay -= OnVoyagerPlay;
+            VoyagerDevice.OnConnected -= OnVoyagerConnected;
+            VoyagerDevice.OnDisconnected -= OnVoyagerDisconnected;
+			VoyagerDevice.OnContentChange -= OnVoyagerContentChange;
+        }
+
+        void Update()
+		{
+			if( VoyagerDevice.Instance == null || !VoyagerDevice.IsInitialized || !VoyagerDevice.IsConnected)
 			{
 				return;
 			}
 
-			// Recenter for Oculus Remote DPad
-			if( Input.GetAxis("Vertical") >= 1.0f )
+			// Recenter for Oculus Remote DPad or Quest 3 B button
+			if( Input.GetAxis("Vertical") >= 1.0f || Input.GetKeyDown(KeyCode.JoystickButton1))
 			{
 				Recenter();
 			}
 
-			// ~===============================================
-			// Key Commands
+            // ~===============================================
+            // Key Commands
 
-			if( Input.GetKeyDown( KeyCode.Space ))		// Play-Pause
+            if ( Input.GetKeyDown( KeyCode.Space ))		// Play-Pause
 			{
 				VoyagerDevice.PlayPause();
 			}
@@ -192,23 +253,23 @@ namespace Positron
 
 				case VoyagerDevicePlayState.Stop:
 				{
-					if( !Mathf.Approximately(experienceTime, 0.0f))
-					{
-						experienceTime = 0.0f;
-						VoyagerDevice.SendTimeSeconds(0.0f);
-					}
+					experienceTime = 0.0f;
+					VoyagerDevice.SendTimeSeconds(experienceTime);
 					break;
 				}
 			}
-
-			string deviceStateStr;
-			string lastRecvDataStr;
-			VoyagerDeviceUtils.DevicePacketToJson(VoyagerDevice.deviceState, out deviceStateStr);
-			VoyagerDeviceUtils.DevicePacketToJson(VoyagerDevice.LastRecvDevicePacket, out lastRecvDataStr);
-
-			deviceDataText.text = deviceStateStr;
-			lastRecvDataText.text = lastRecvDataStr;
-			stateText.text = string.Format("Voyager state '{0}'", VoyagerDevice.PlayState.ToString());
+			UpdateText();
 		}
+		void UpdateText()
+		{
+            string deviceStateStr;
+            string lastRecvDataStr;
+            VoyagerDeviceUtils.DevicePacketToJson(VoyagerDevice.deviceState, out deviceStateStr);
+            VoyagerDeviceUtils.DevicePacketToJson(VoyagerDevice.LastRecvDevicePacket, out lastRecvDataStr);
+
+            deviceDataText.text = deviceStateStr;
+            lastRecvDataText.text = lastRecvDataStr;
+            stateText.text = string.Format("Voyager state '{0}'", VoyagerDevice.PlayState.ToString());
+        }
 	}
 }

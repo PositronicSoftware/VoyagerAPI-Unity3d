@@ -12,5 +12,7 @@ EditorBuildSettings:
     path: Assets/VoyagerAPI/Scenes/Voyager API Test.unity
     guid: 92159439a921afd498964d1c44aedaae
   m_configObjects:
+    Unity.XR.Oculus.Settings: {fileID: 11400000, guid: e0c00b41adc3469489b5cd1030bd3542,
+      type: 2}
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 4febb8a34760ed44d975fe3039f94f88,
       type: 2}

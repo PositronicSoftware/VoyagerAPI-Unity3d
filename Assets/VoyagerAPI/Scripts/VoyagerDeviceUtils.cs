@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections;
 using System.IO;
 using UnityEngine;
-using UnityEngine.Networking;
 
 namespace Positron
 {
@@ -35,11 +33,8 @@ namespace Positron
 		/** IP Address to connect to */
 		public string ipAddr;
 
-		/** UDP Port number to send from */
-		public int sendPortNum;
-
-		/** UDP Port number to receive from */
-		public int recvPortNum;
+		/** TCP Port number to connect on */
+		public int portNum;
 
 		/** Display logs on the screen */
 		public bool onScreenLogs;
@@ -47,31 +42,28 @@ namespace Positron
 		public VoyagerDeviceConfig()
 		{
 			ipAddr = VoyagerDefaults.localHostIP;
-			sendPortNum = VoyagerDefaults.udpSendPort;
-			recvPortNum = VoyagerDefaults.udpRecvPort;
+			portNum = VoyagerDefaults.tcpPort;
 			onScreenLogs = true;
 		}
 
-		public VoyagerDeviceConfig(int inSendPortNum)
+		public VoyagerDeviceConfig(int inPortNum)
 		{
 			ipAddr = VoyagerDefaults.localHostIP;
-			sendPortNum = inSendPortNum;
-			recvPortNum = VoyagerDefaults.udpRecvPort;
+			portNum = inPortNum;
 			onScreenLogs = true;
 		}
 
-		public VoyagerDeviceConfig(string inIpAddr, int inSendPortNum, int inRecvPortNum, bool inOnScreenLogs)
+		public VoyagerDeviceConfig(string inIpAddr, int inPortNum, bool inOnScreenLogs)
 		{
 			ipAddr = inIpAddr;
-			sendPortNum = inSendPortNum;
-			recvPortNum = inRecvPortNum;
+			portNum = inPortNum;
 			onScreenLogs = inOnScreenLogs;
 		}
 
 		/** Converts to readable String */
 		public override string ToString()
 		{
-			return string.Format("[ IP: '{0}', SendPort: {1}, RecvPort: {2}, ScreenLogs: {3} ]", ipAddr, sendPortNum, recvPortNum, onScreenLogs);
+			return string.Format("[ IP: '{0}', Port: {1}, ScreenLogs: {2} ]", ipAddr, portNum, onScreenLogs);
 		}
 	}
 
@@ -110,8 +102,12 @@ namespace Positron
 		 * Windows build uses Application.streamingAssetsPath - Ex: VoyagerDemo\VoyagerDemo_Data\StreamingAssets\Config\VoyagerDevice.json
 		 *
 		 * Editor uses Application.streamingAssetsPath - Ex: VoyagerDemo\Assets\StreamingAssets\Config\VoyagerDevice.json
+		 * 
+		 * Android note: if using adb push to set config files, be sure to update permissions with chmod to at least 555 for CONFIG_DIRNAME and 444 for CONFIG_FILENAME
+		 * File.Exists will return false if there is not sufficient user permissions, even if READ_EXTERNAL_STORAGE is properly granted
+		 * 
 		 */
-		public static VoyagerDeviceConfig LoadDeviceConfigFile(string dirName, string fileName, VoyagerDeviceConfigId settingId = VoyagerDeviceConfigId.VDC_Default)
+        public static VoyagerDeviceConfig LoadDeviceConfigFile(string dirName, string fileName, VoyagerDeviceConfigId settingId = VoyagerDeviceConfigId.VDC_Default)
 		{
 			VoyagerDeviceConfig result = new VoyagerDeviceConfig();
 			string configPath = Path.Combine(dirName, fileName);

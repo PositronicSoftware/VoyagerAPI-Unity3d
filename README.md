@@ -1,10 +1,62 @@
 # Voyager API Unity3d Tester & Source
 
 Please use the latest release when intergating in to your project > [Releases](https://github.com/PositronicSoftware/VoyagerAPI-Unity3d/releases).
-
 ---------------------------------------------------------------------------
+## Initial Setup and Dependencies 
 
-## Key Classes
+**Before** importing VoyagerAPI.unitypackage your project must have the following packages installed for the test scenes to work.
+
+|Package Name 
+|--------------------------       |
+|com.unity.xr.interaction.toolkit |XR Interaction Toolkit
+|com.unity.ugui			          |Unity UI
+|com.unity.inputsystem	          |Input System
+
+To add them: Window, Package Manager, switch the top left dropdown to packages: Unity Registry, search by name. 
+
+For new projects, enable run in background in player settings, resolution.
+
+## Setup for Android
+Install XR Plug-in Management, otherwise the test scenes will run like a phone app.
+
+![VoyagerManager Properties](Docs/XRPlug-inManagement.png)
+
+## Quest 3 Project Setup 
+
+**User presence**
+
+Use the Oculus plug in provider in XR-Plugin management or this will be always true
+
+**Recentering**
+
+Any recenter API calls are no-op for Quest 3.
+https://forum.unity.com/threads/xr-recenter-not-working-in-oculus-quest-2.1129019/#post-7268662
+
+To recenter, move the XROrigin (or similiar rig) appropriately like a teleport to compensate for the rotation and position of the headset (camera)  
+See VoyagerAPITest.OnVoyagerRecenter for an example
+
+Disable system recenter from user presence by setting the origin tracking to stage mode.  
+1. Set the Tracking Origin Mode to floor in your rig in the scene
+2. In project settings, XR Plugin Management. Oculus, Android settings: check the box "Enable TrackingOrigin Stage Mode"
+
+**Sleep**
+
+Increase the time before sleep in Settings, System, Power from 15 seconds up to 4hrs to reduce the number of disconnects.
+
+**Meta setup guide**
+
+https://developer.oculus.com/documentation/unity/unity-tutorial-hello-vr/#step-6-run-unity-project-setup-tool
+
+If you choose to use the OVRCameraRig it means you have to re-implement recentering, see TeleportationProvider.Update
+
+## Positronic Standalone Headset Software (PSHS)
+
+PSHS must be running to connect with PSM.
+
+See the readme and download the latest release here:
+https://github.com/PositronicSoftware/Positronic-Standalone-Headset-Software
+
+## Key Classes & Scenes
 
 _Class_ **VoyagerDevice**
 
@@ -17,6 +69,14 @@ Defines the network-connection settings for interfacing with a Voyager chair. Us
 _Class_ **VoyagerDeviceUtils**
 
 Implements loading a _VoyagerDeviceConfig_ object from a JSON config-file. For details, read the 'Device Settings Config' section below.
+
+### Examples
+
+_Scene_ VoyagerAPI/Scenes/Voyager API Test.unity
+_Class_ VoyagerAPI/Scripts/VoyagerAPITest.cs
+
+_Scene_ Voyager API Example/Scenes/Voyager Demo.unity
+_Class_ VoyagerAPI/Scripts/VoyagerManager.cs
 
 ---------------------------------------------------------------------------
 
@@ -33,10 +93,15 @@ Now add the `VoyagerManager` and `TimelineControl` Components to this GameObject
 ![VoyagerManager Properties](Docs/VoyagerManagerProperties.png)
 
 1. `Start Mode` allows you to initialize in the Voyager in different states based on project requirements.
-2. `Path` should be set to your build executable path `"C:/ExecutableName.exe"` in the inspector.
-3. `Timeline Control` can be left null. It will be auto-set on Play if a TimelineControl component is detected.
-4. You can optimize the VoyagerManager SendTime() frequency on memory-constrained platforms by setting `optimizeSendTime = true` in the inspector.
-5. VoyagerManager will load your PSM connection settings from a JSON Config file: See [Device Settings Config](#device-settings-config).
+
+If in single experience executable mode:
+1. Check the single experience executable checkbox.
+2. `Path` should be set to your build executable path `"C:\ExecutableName.exe"` in the inspector.
+
+In either mode single experience or player mode: 
+1. `Timeline Control` can be left null. It will be auto-set on Play if a TimelineControl component is detected.
+2. You can optimize the VoyagerManager SendTime() frequency on memory-constrained platforms by setting `optimizeSendTime = true` in the inspector.
+3. VoyagerManager will load your PSM connection settings from a JSON Config file: See [Device Settings Config](#device-settings-config).
 
 VoyagerManager implements the following Keyboard commands for us to easily create Motion data and test your experience.
 
@@ -65,6 +130,8 @@ This component is required if your project is using 1 or more `PlayableDirector`
 
 ## Using the API - CSharp
 
+VoyagerAPITest.cs and VoyagerManager.cs both have examples of using the API
+
 ### 01 | Construct and Init() a VoyagerDevice
 
 ```csharp
@@ -72,7 +139,7 @@ var voyagerDevice = VoyagerDevice.Instance; // Init Singleton
 if( voyagerDevice == null )
 {
 	Debug.LogError("Failed to create VoyagerDevice Singleton.");
-	yield break;
+	return;
 }
 ```
 
@@ -89,32 +156,67 @@ VoyagerDevice.Init(config);
 if( !VoyagerDevice.IsInitialized )
 {
 	Debug.LogError("VoyagerDevice not initialized.");
-	yield break;
+	return;
 }
 ```
-
-### 02 | Connect VoyagerDevice to PSM
-
-The following sequence of calls ensures that the newly created `UVoyagerDevice` instance is linked with the **Positronic Show Manager** ( PSM ) that controls the chair.
+### 02 | Listen to Connect/Disconnect events 
+You must wait for a connection to be established before following the sequence of calls in step 03
 
 ```csharp
-// Set the Content Params.
-VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
+VoyagerDevice.OnClientConnected += OnConnected;
+VoyagerDevice.OnClientDisconnected += OnDisconnected;
 
-// Experience should start in Paused state.
-VoyagerDevice.Pause();
-
-// Set the Content ID.
-VoyagerDevice.LoadContent("C:/ExecutableName.exe");
-
-// Notify PSM that loading is complete.
-VoyagerDevice.Loaded(true);
-
-// Set the initial Motion Profile track name.
-VoyagerDevice.SetMotionProfile( "TestProfile" );
+// If you are creating a player, this event fires when PSM sends a url
+VoyagerDevice.OnContentChange += OnVoyagerContentChange;
 ```
 
-### 03 | Listen To UVoyagerDevice Events
+### 03 | Connect VoyagerDevice to PSM
+
+The following sequence of calls ensures that the newly created `VoyagerDevice` instance is linked with the **Positronic Show Manager** ( PSM ) that controls the chair.
+
+```csharp
+private void OnConnected()
+{
+	// Set the Content Params.
+	VoyagerDevice.SetContent("Application", "Windows", "Voyager VR Demo", "1.0");
+
+	// Media players should start in Stopped state.
+    // VoyagerDevice.Stop();
+
+	// If you are not making a player:
+
+	// Experience should start in Paused state
+	VoyagerDevice.Pause();
+
+	// Set the Content ID.
+	VoyagerDevice.LoadContent("C:/ExecutableName.exe");
+	
+	// Notify PSM when loading is complete.
+	VoyagerDevice.Loaded(true);
+
+	// Set the initial Motion Profile track name.
+	VoyagerDevice.SetMotionProfile("TestProfile");
+}
+
+// If you are creating a player, respond to PSM events to change content. You can remove these calls from OnConnected.
+private void OnVoyagerContentChange(string inUrl)
+{
+	// Set the Content ID. Send back the same url as a confirmation to avoid errors
+	VoyagerDevice.LoadContent(inUrl);
+
+	// Notify PSM when loading is complete.
+	VoyagerDevice.Loaded(true);
+
+	// Set the initial Motion Profile track name.
+	VoyagerDevice.SetMotionProfile("TestProfile");
+
+	// Media Players should pause after changing content
+    VoyagerDevice.Pause();
+}
+
+```
+
+### 04 | Listen To additional VoyagerDevice Events
 
 The `VoyagerDevice` has useful events that you can Bind to in order to control your experience. These events are triggered based on calls from Positronic Show Manager ( PSM ).
 
@@ -129,7 +231,7 @@ VoyagerDevice.OnMotionProfileChange += OnVoyagerMotionProfileChange;
 VoyagerDevice.OnUserPresentToggle += OnVoyagerUserPresentToggle;
 ```
 
-### 04 | Send Experience Time back to PSM
+### 05 | Send Experience Time back to PSM
 
 ```csharp
 switch( VoyagerDevice.PlayState )
@@ -156,7 +258,7 @@ For the Voyager Chair to accurately synchronize motion with the experience, you 
 * You must continue to send _Experience Time_ back to PSM even if the Voyager state is Paused.
 * If PSM stops receiving time data from the API for a certain duration it will cause errors.
 
-### 05 | Key Commands for Motion Encoding and Testing
+### 06 | Key Commands for Motion Encoding and Testing
 
 For us to easily create Motion data for your experience, and test it, we require projects to support the following Keyboard commands.
 
@@ -174,6 +276,8 @@ Key 				| Command
 
 ## Device Settings Config
 
+Using a remote IP works with Quest 3, but it's for development purposes only and is not supported. You must also change the PSHS config file.
+
 If you wish to load _VoyagerDeviceConfig_ settings from a config-file, do the following:
 
 1. Setup a folder in '<ProjectName>/Assets/StreamingAssets/' directory, that will contain your config file(s). 
@@ -185,15 +289,15 @@ If you wish to load _VoyagerDeviceConfig_ settings from a config-file, do the fo
 	"comment": "Change the 'use' property above to select settings: 1-local, 2-development, 3-production",
 	"local":
 	{
-		"ipAddr": "127.0.0.1", "sendPortNum": 61557, "recvPortNum": 7755, "onScreenLogs": true
+		"ipAddr": "127.0.0.1", "portNum": 61557, "onScreenLogs": true
 	},
 	"development":
 	{
-		"ipAddr": "192.166.0.82", "sendPortNum": 61557, "recvPortNum": 7755, "onScreenLogs": true
+		"ipAddr": "127.0.0.1", "portNum": 61557, "onScreenLogs": true
 	},
 	"production":
 	{
-		"ipAddr": "192.168.13.100", "sendPortNum": 61557, "recvPortNum": 7755, "onScreenLogs": true
+		"ipAddr": "127.0.0.1", "portNum": 61557, "onScreenLogs": true
 	}
 }
 ```
@@ -219,21 +323,32 @@ VoyagerDevice.Init(deviceConfig); // Initialize the interface w/ the config.
 | :-------- | :-------- |
 | In-Editor | `<ProjectDir>\Assets\StreamingAssets\<ConfigDir>\<FileName>` |
 | Windows Build | `<BuildFolder>\<ProjectName>_Data\StreamingAssets\<ConfigDir>\<FileName>` |
-| OculusGo Build | `/storage/emulated/0/Android/data/<packagename>/files/<ConfigDir>/<FileName>` |
+| Quest 3 Build | `/storage/emulated/0/Android/data/<packagename>/files/<ConfigDir>/<FileName>` |
 
 **In-Editor and Windows Builds**
 
 You can edit your config-file(s) without having to rebuild ( assuming you did step 2 ). This allows you to quickly test different network settings.
 
-**Oculus-Go Builds**
+**Quest 3 Builds**
 
 For Android, the config loading system will use the  `'/storage/emulated/0/Android/data/<packagename>/files/<ConfigDir>/...'` path for your configs.
 
-You can use the provided script `BatchScripts/Push_DeviceConfig.bat` to push your config file(s) to the _Go_ through ADB. This allows you to test different network settings without having to re-deploy the app.
+You can use the provided script `BatchScripts/Push_DeviceConfig.bat` to push your config file(s) to the _Quest 3_ through ADB. This allows you to test different network settings without having to re-deploy the app.
+
+This batch file also sets permissions with adb shell chmod on the config folder and file, which was necessary in testing. 
+
+**Working Quest 3 settings** (other settings may work): API Target 29, write permission external (sdcard)
+Additional AndroidManifest.xml settings:
+```xml
+<application android:requestLegacyExternalStorage="true">
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+```
+See Assets/Plugins/Android/AndroidManifest.xml 
 
 </br>
 
-> See the Example Project for a working implementation of this in 'VoyagerAPITest.cs', in the `Awake()` method.
+> See the Example Project for a working implementation of this in 'VoyagerAPITest.cs', in the `Start()` method.
 
 ---------------------------------------------------------------------------
 
@@ -243,21 +358,29 @@ This project implements a simple demo scene that shows you how to use VoyagerDev
 
 **VoyagerAPITest.cs**
 
-Povides a working example of how to initialize a VoyagerDevice
+Povides a working example of how to initialize a VoyagerDevice and how to reconnect/disconnect paused
 
 **Voyager API Test.unity**
 
-A simple test scene for the API. UI buttons make API calls to the VoyagerDevice Instance. UI Tested with with mouse, Rift remote click, and gaze in Oculus Go.
+A simple test scene for the API, setup like a media player. UI buttons make API calls to the VoyagerDevice Instance. UI Tested with with mouse and gaze with Quest 3.
+
+Use https://github.com/PositronicSoftware/PositronicTester for testing and select a real mp4 file as content.
 
 ---------------------------------------------------------------------------
 
 ## Debugging
+Consider using PositronicTester before PSM because it doesn't check for haptics etc.
+
+For PSM check content. Make sure vmedia,vmotion,-haptics,mp4 are in the correct path on the PC side.  
+Example by default: C:\Positron\Media\Scent of a Song\Scent of a Song.vmedia, etc 
+
+Recentering from PSM also pauses. This is intended.
 
 **Windows**
 
 Runtime logging from the API is written to the log file.
 
-**Oculus GO**
+**Quest 3**
 
 You can use our batch script Push_DeviceConfig.bat in `BatchScripts/` to push a new JSON config file(s)
 

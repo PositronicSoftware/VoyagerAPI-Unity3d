@@ -1,32 +1,80 @@
 fileFormatVersion: 2
 guid: eb9a01d178a85eb41b99822b6acad79b
 ModelImporter:
-  serializedVersion: 23
-  fileIDToRecycleName:
-    100000: //RootNode
-    100002: GUIArrowsLeft
-    100004: GUIArrowsRight
-    100006: GUIArrowsRear
-    400000: //RootNode
-    400002: GUIArrowsLeft
-    400004: GUIArrowsRight
-    400006: GUIArrowsRear
-    2300000: //RootNode
-    2300002: GUIArrowsLeft
-    2300004: GUIArrowsRight
-    2300006: GUIArrowsRear
-    3300000: //RootNode
-    3300002: GUIArrowsLeft
-    3300004: GUIArrowsRight
-    3300006: GUIArrowsRear
-    4300000: MenuArrows001
-    4300002: GUIArrows001
-    4300004: GUIArrowsLeft
-    4300006: GUIArrowsRight
-    4300008: GUIArrowsRear
-    7400000: GUIArrowsBob
-    9500000: //RootNode
-    2186277476908879412: ImportLogs
+  serializedVersion: 21300
+  internalIDToNameTable:
+  - first:
+      1: 100000
+    second: //RootNode
+  - first:
+      1: 100002
+    second: GUIArrowsLeft
+  - first:
+      1: 100004
+    second: GUIArrowsRight
+  - first:
+      1: 100006
+    second: GUIArrowsRear
+  - first:
+      4: 400000
+    second: //RootNode
+  - first:
+      4: 400002
+    second: GUIArrowsLeft
+  - first:
+      4: 400004
+    second: GUIArrowsRight
+  - first:
+      4: 400006
+    second: GUIArrowsRear
+  - first:
+      23: 2300000
+    second: //RootNode
+  - first:
+      23: 2300002
+    second: GUIArrowsLeft
+  - first:
+      23: 2300004
+    second: GUIArrowsRight
+  - first:
+      23: 2300006
+    second: GUIArrowsRear
+  - first:
+      33: 3300000
+    second: //RootNode
+  - first:
+      33: 3300002
+    second: GUIArrowsLeft
+  - first:
+      33: 3300004
+    second: GUIArrowsRight
+  - first:
+      33: 3300006
+    second: GUIArrowsRear
+  - first:
+      43: 4300000
+    second: MenuArrows001
+  - first:
+      43: 4300002
+    second: GUIArrows001
+  - first:
+      43: 4300004
+    second: GUIArrowsLeft
+  - first:
+      43: 4300006
+    second: GUIArrowsRight
+  - first:
+      43: 4300008
+    second: GUIArrowsRear
+  - first:
+      74: 7400000
+    second: GUIArrowsBob
+  - first:
+      95: 9500000
+    second: //RootNode
+  - first:
+      41386430: 2186277476908879412
+    second: ImportLogs
   externalObjects:
   - first:
       type: UnityEngine:Material
@@ -39,7 +87,7 @@ ModelImporter:
       name: GUILogo
     second: {fileID: 2100000, guid: 6de59d8a92734f542add198e11a6280b, type: 2}
   materials:
-    importMaterials: 1
+    materialImportMode: 1
     materialName: 1
     materialSearch: 2
     materialLocation: 0
@@ -48,6 +96,7 @@ ModelImporter:
     bakeSimulation: 0
     resampleCurves: 1
     optimizeGameObjects: 0
+    removeConstantScaleCurves: 0
     motionNodeName: 
     rigImportErrors: 
     rigImportWarnings: 
@@ -68,6 +117,7 @@ ModelImporter:
     - serializedVersion: 16
       name: GUIArrowsBob
       takeName: Take 001
+      internalID: 0
       firstFrame: 1
       lastFrame: 30
       wrapMode: 0
@@ -106,25 +156,34 @@ ModelImporter:
     meshCompression: 0
     addColliders: 0
     useSRGBMaterialColor: 1
+    sortHierarchyByName: 1
     importVisibility: 0
     importBlendShapes: 1
     importCameras: 0
     importLights: 0
+    nodeNameCollisionStrategy: 0
+    fileIdsGeneration: 1
     swapUVChannels: 0
     generateSecondaryUV: 0
     useFileUnits: 1
-    optimizeMeshForGPU: 1
     keepQuads: 0
     weldVertices: 1
+    bakeAxisConversion: 0
     preserveHierarchy: 0
+    skinWeightsMode: 0
+    maxBonesPerVertex: 4
+    minBoneWeight: 0.001
+    optimizeBones: 1
+    meshOptimizationFlags: -1
     indexFormat: 1
     secondaryUVAngleDistortion: 8
     secondaryUVAreaDistortion: 15.000001
     secondaryUVHardAngle: 88
+    secondaryUVMarginMethod: 0
+    secondaryUVMinLightmapResolution: 40
+    secondaryUVMinObjectScale: 1
     secondaryUVPackMargin: 4
     useFileScale: 1
-    previousCalculatedGlobalScale: 0.01
-    hasPreviousCalculatedGlobalScale: 1
   tangentSpace:
     normalSmoothAngle: 60
     normalImportMode: 0
@@ -133,10 +192,10 @@ ModelImporter:
     legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes: 1
     blendShapeNormalImportMode: 1
     normalSmoothingSource: 0
-  importAnimation: 1
-  copyAvatar: 0
+  referencedClips: []
+  importAnimation: 0
   humanDescription:
-    serializedVersion: 2
+    serializedVersion: 3
     human: []
     skeleton: []
     armTwist: 0.5
@@ -146,13 +205,18 @@ ModelImporter:
     armStretch: 0.05
     legStretch: 0.05
     feetSpacing: 0
+    globalScale: 1
     rootMotionBoneName: 
     hasTranslationDoF: 0
     hasExtraRoot: 0
     skeletonHasParents: 0
   lastHumanDescriptionAvatarSource: {instanceID: 0}
+  autoGenerateAvatarMappingIfUnspecified: 1
   animationType: 2
   humanoidOversampling: 1
+  avatarSetup: 1
+  addHumanoidExtraRootOnlyWhenUsingAvatar: 0
+  remapMaterialsIfMaterialImportModeIsNone: 1
   additionalBone: 0
   userData: 
   assetBundleName: 

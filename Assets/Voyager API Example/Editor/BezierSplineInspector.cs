@@ -147,14 +147,14 @@ public class BezierSplineInspector : Editor {
 	void OnEnable() {
 		// Remove delegate listener if it has previously
 		// been assigned.
-		SceneView.onSceneGUIDelegate -= this.OnScene;
+		SceneView.duringSceneGui -= this.OnScene;
 		// Add (or re-add) the delegate.
-		SceneView.onSceneGUIDelegate += this.OnScene;
+		SceneView.duringSceneGui += this.OnScene;
 	}
 
 	void OnDestroy() {
 		// When the window is destroyed, remove the delegate
 		// so that it will no longer do any drawing.
-		SceneView.onSceneGUIDelegate -= this.OnScene;
+		SceneView.duringSceneGui -= this.OnScene;
 	}
 }
