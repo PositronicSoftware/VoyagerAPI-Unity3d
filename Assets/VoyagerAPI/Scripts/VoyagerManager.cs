@@ -2,14 +2,14 @@
 
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.XR;
+using UnityEngine.XR.Interaction.Toolkit;
 
 namespace Positron
 {
-	public enum VoyagerMangerStartMode { StartPaused, StartIdle }
+	public enum VoyagerMangerStartMode { StartPaused, StartIdle, StartStopped }
 
 	/* This class is used to initialize the Voyager Interface
 	 * and execute the commands from the Voyager Interface*/
@@ -17,10 +17,10 @@ namespace Positron
 	{
 		[ Header("Initialization") ]
 
-		// State to initialize the Voyager API in.
-		public VoyagerMangerStartMode startMode = VoyagerMangerStartMode.StartPaused;
+        [Tooltip("State to initialize the Voyager API in. StartStopped is only valid for media players.")]
+        public VoyagerMangerStartMode startMode = VoyagerMangerStartMode.StartPaused;
 
-        [Tooltip("Assign the reference to xr origin from your scene, also sets tracking mode.")]
+        [Tooltip("Assign the reference to the xr origin rig from your scene.")]
         public XROrigin xrOrigin;
 
         [Header("Content Path")]
@@ -58,6 +58,10 @@ namespace Positron
 		// Used to restore the PlayState after losing connection
 		private VoyagerDevicePlayState disconnectedState;
 		private bool lostConnection = false;
+
+        // Used to set the rotation and position during recenter
+        private TeleportationProvider teleportationProvider;
+        private LocomotionSystem locomotionSystem;
 
         // Fade in the screen
         public void ScreenFadeIn()
@@ -249,54 +253,56 @@ namespace Positron
             // Quest 3 apps running on android standalone (not Quest Link) only allow recentering from a user. Any recenter api calls are no-op. 
             // (https://forum.unity.com/threads/xr-recenter-not-working-in-oculus-quest-2.1129019/#post-7268662)
 
-            // Undo any y rotation 
             if (Application.platform == RuntimePlatform.Android)
 			{
-				float currentYRotation = Camera.main.transform.eulerAngles.y;
-				xrOrigin.transform.Rotate(0, -currentYRotation, 0);
+                // Two - Step Centering: Application centers position + orientation on command from PSM.
 
-				return true;
+                float userHeightOffset = xrOrigin.Camera.transform.localPosition.y;
+
+                TeleportRequest request = new TeleportRequest()
+                {
+                    destinationPosition = new Vector3(0.0f, -userHeightOffset, 0.0f),
+                    destinationRotation = Quaternion.identity,
+                    matchOrientation = MatchOrientation.TargetUpAndForward,
+                };
+                teleportationProvider.QueueTeleportRequest(request);
+
+                return true;
 			}
 	
-			if ( VoyagerDevice.IsPresent())
+			bool recentered = false;
+			xrInputSubsystems.Clear();
+			SubsystemManager.GetInstances<XRInputSubsystem>(xrInputSubsystems);
+
+			for (int i = 0; i < xrInputSubsystems.Count; i++)
 			{
-				bool recentered = false;
-				xrInputSubsystems.Clear();
-				SubsystemManager.GetInstances<XRInputSubsystem>(xrInputSubsystems);
-
-				for (int i = 0; i < xrInputSubsystems.Count; i++)
-				{
-					bool tryRecenter = false;
-					if (xrInputSubsystems[i] != null) {
-						xrInputSubsystems[i].TrySetTrackingOriginMode(xrOrigin.CurrentTrackingOriginMode);
-						tryRecenter = xrInputSubsystems[i].TryRecenter();
-					}
-
-					if (tryRecenter) {
-						recentered = true;
-					}
+				if (xrInputSubsystems[i] != null) {
+                    recentered = xrInputSubsystems[i].TryRecenter();
 				}
-
-				return recentered;
 			}
 
-			return false;
+			return recentered;
 		}
 
-		void Awake()
+        private void Awake()
 		{
 			DontDestroyOnLoad( this );
+
+            locomotionSystem = gameObject.AddComponent<LocomotionSystem>();
+            locomotionSystem.xrOrigin = xrOrigin;
+
+            teleportationProvider = gameObject.AddComponent<TeleportationProvider>();
+            teleportationProvider.system = locomotionSystem;
 
 			if( timelineControl == null )
 			{
 				timelineControl = GetComponent<TimelineControl>();
 			}
 
-			// Init HMD
-			TryRecenter();
+            TryRecenter();
 		}
 
-		IEnumerator Start()
+		private void Start()
 		{
 			screenFader = FindObjectOfType<ScreenFader>();
 
@@ -308,7 +314,7 @@ namespace Positron
 			if( voyagerDevice == null )
 			{
 				Debug.LogError("Failed to create VoyagerDevice Singleton.");
-				yield break;
+				return;
 			}
 
 			// Load config from file
@@ -321,14 +327,8 @@ namespace Positron
             if ( !VoyagerDevice.IsInitialized )
 			{
 				Debug.LogError("VoyagerDevice not initialized.");
-				yield break;
+				return;
 			}
-
-            // Wait until we are connected.
-            yield return new WaitUntil(() => VoyagerDevice.IsConnected);
-
-			// Calling this before events are hooked up to retain old behavior
-			OnVoyagerConnected();
 
             // ~===============================================
             // Bind Events
@@ -352,7 +352,8 @@ namespace Positron
         
 		private void OnVoyagerConnected()
 		{
-			// Reconnect:
+            // Reconnect:
+            // This resumes state, for pausing only see VoyagerAPITest.OnVoyagerConnected
             if (lostConnection)
             {
                 switch(disconnectedState)
@@ -395,6 +396,11 @@ namespace Positron
                         VoyagerDevice.Pause();
                         break;
                     }
+                case VoyagerMangerStartMode.StartStopped:
+                    {
+                        VoyagerDevice.Stop();
+                        break;
+                    }
                 default:
                     {
                         Debug.LogError("Unhandled Start Mode " + startMode);
@@ -435,18 +441,23 @@ namespace Positron
 
 				// Set the Motion Profile
                 VoyagerDevice.SetMotionProfile("A");
+
+                // Media Players should pause after changing content
+                VoyagerDevice.Pause();
             }
         }
 
         private void OnVoyagerDisconnected()
         {
+            // This helps resumes state, for pausing only see VoyagerAPITest.OnVoyagerDisconnected
+
             // Additional connection state tracking (lostConnection) is necessary because the disconnected event could fire many times while reconnecting and disconnected state could get overwritten
             if (!lostConnection)
 			{
 				// Store the state when disconnecting for the first time after losing a connection
 				disconnectedState = VoyagerDevice.PlayState;
 				
-				// This will log a warning since there is no connection
+				// Logs a warning since there is no connection
 				VoyagerDevice.Pause();
 				lostConnection = true;
 			}
@@ -483,7 +494,10 @@ namespace Positron
 				{
 					Time.timeScale = previousTimeScale;
 
-					ExitApp();
+					if (singleExperienceExecutable)
+					{
+						ExitApp();
+					}
 
 					break;
 				}
@@ -492,7 +506,23 @@ namespace Positron
 
 		void OnVoyagerPlay()
 		{
-			if( timelineControl )
+            // Two - Step Centering: Application centers position on experience start(play ).
+            // Adjust height when user puts on headset, see TryRecenter for more information
+
+            if (Application.platform == RuntimePlatform.Android)
+			{
+				float userHeightOffset = xrOrigin.Camera.transform.localPosition.y;
+
+				TeleportRequest request = new TeleportRequest()
+				{
+					destinationPosition = new Vector3(0.0f, -userHeightOffset, 0.0f),
+					matchOrientation = MatchOrientation.None,
+				};
+				teleportationProvider.QueueTeleportRequest(request);
+			}
+
+
+            if ( timelineControl )
 			{
 				timelineControl.PlayTrack();
 			}
@@ -517,34 +547,25 @@ namespace Positron
 		}
         void OnVoyagerRecenterHMD()
 		{
-			if ( VoyagerDevice.IsPresent() )
+			if ( XRSettings.enabled )
 			{
-				if ( XRSettings.enabled )
+				if (!TryRecenter()) 
 				{
-					if (!TryRecenter()) 
-					{
-						Debug.LogWarning("HMD not recentered, try again");
-					}
+					Debug.LogWarning("HMD not recentered, try again");
 				}
-				else
-				{
-					Debug.LogWarning("Recieved OnVoyagerRecenterHMD() 'Recenter' callback when UnityEngine.XR is disabled.");
-				}
+			}
+			else
+			{
+				Debug.LogWarning("Recieved OnVoyagerRecenterHMD() 'Recenter' callback when UnityEngine.XR is disabled.");
 			}
         }
 
 		void OnVoyagerUserPresentToggle(bool InValue)
 		{
+			// For Quest 3 - Use oculus plug in provider in XR-Plugin management for User Presence detection to work properly
 
             if ( InValue )
 			{
-				// Adjust height when user puts on headset, see TryRecenter for more information
-				if (Application.platform == RuntimePlatform.Android)
-				{
-					Vector3 cameraPosition = xrOrigin.Camera.transform.localPosition;
-					xrOrigin.Origin.transform.position = new Vector3(0, -cameraPosition.y, 0);
-				}
-
 				Debug.Log("Recieved OnVoyagerUserPresentToggle() with 'UserPresent' TRUE.");
 			}
 			else
@@ -644,45 +665,29 @@ namespace Positron
 			int tickNum = Time.frameCount;
 			if( !optimizeSendTime || (tickNum % voyagerSendTimeInterval) == 0 )
 			{
-				switch( VoyagerDevice.PlayState )
-				{
-					case VoyagerDevicePlayState.Play:
-					{
-						if( timelineControl == null )
-						{
-							VoyagerDevice.SendTimeSeconds(experienceTime);
-						}
-						else
-						{
-							experienceTime = timelineControl.SendTimeSeconds();
-						}
-						break;
-					}
-
-					case VoyagerDevicePlayState.Pause:
-					{
-						if( timelineControl == null )
-						{
-							VoyagerDevice.SendTimeSeconds(experienceTime);
-						}
-						else
-						{
-							experienceTime = timelineControl.SendTimeSeconds();
-						}
-						break;
-					}
-
-					case VoyagerDevicePlayState.Stop:
-					{
-						if( !Mathf.Approximately(experienceTime, 0.0f))
-						{
-							experienceTime = 0.0f;
-							VoyagerDevice.SendTimeSeconds(0.0f);
-						}
-						break;
-					}
-				}
-			}
+                switch (VoyagerDevice.PlayState)
+                {
+                    case VoyagerDevicePlayState.Stop:
+                        {
+                            experienceTime = 0.0f;
+                            VoyagerDevice.SendTimeSeconds(0.0f);
+                            break;
+                        }
+						// Send time for all other states (play/pause/idle) to avoid errors
+                    default:
+                        {
+                            if (timelineControl == null)
+                            {
+                                VoyagerDevice.SendTimeSeconds(experienceTime);
+                            }
+                            else
+                            {
+                                experienceTime = timelineControl.SendTimeSeconds();
+                            }
+                            break;
+                        }
+                }
+            }
 
 			// ~===============================================
 			// Handle Fast-Forward and Rewind

@@ -1,6 +1,5 @@
 /* Copyright 2017 Positron code by Brad Nelson */
 
-using System.Collections;
 using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.UI;
@@ -18,7 +17,7 @@ namespace Positron
 
 		public XROrigin xrOrigin;
 
-        // Used to properly set the rotation and position during recenter
+        // Used to set the rotation and position during recenter
         private TeleportationProvider teleportationProvider;
 		private LocomotionSystem locomotionSystem;
 
@@ -69,7 +68,7 @@ namespace Positron
 			teleportationProvider.system = locomotionSystem;
 		}
 
-		IEnumerator Start()
+		private void Start()
 		{
 
             // Make sure we have an instance of the Positron interface before we do anything else
@@ -77,7 +76,7 @@ namespace Positron
 			if (voyagerDevice == null)
 			{
 				Debug.LogError("Failed to create VoyagerDevice Singleton.");
-				yield break;
+				return;
 			}
 
 			// Load config from file
@@ -90,7 +89,7 @@ namespace Positron
 			if (!VoyagerDevice.IsInitialized)
 			{
 				Debug.LogError("VoyagerDevice not initialized.");
-				yield break;
+				return;
 			}
 
 			// Setup calls must be done when connected
@@ -133,11 +132,14 @@ namespace Positron
 
 			// Set the initial Motion Profile track name.
 			VoyagerDevice.SetMotionProfile("TestProfile");
-		}
+
+			// Media Players should pause after changing content
+            VoyagerDevice.Pause();
+        }
 
 		private void OnVoyagerDisconnected()
 		{
-			// This will log a warning since there is no connection.
+			// Logs a warning since there is no connection.
 			VoyagerDevice.Pause();
 
 			// Update UI to show the paused state.
