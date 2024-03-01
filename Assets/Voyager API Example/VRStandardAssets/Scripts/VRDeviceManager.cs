@@ -12,7 +12,8 @@ namespace VRStandardAssets.Utils
     // The class uses the singleton pattern so that only one object exists.
     public class VRDeviceManager : MonoBehaviour
     {
-        [SerializeField] private float m_RenderScale = 1.4f;
+        // Unused
+        // [SerializeField] private float m_RenderScale = 1.4f;
 
 
         private static VRDeviceManager s_Instance;

@@ -17,9 +17,11 @@ public class EnvironmentSpawner : MonoBehaviour
 
 	[SerializeField] private float m_AsteroidSpawnFrequency = 1f;       // The time between asteroids spawning in seconds.
 	[SerializeField] private float m_RingSpawnFrequency = 0.5f;         // The time between rings spawning in seconds.
-	[SerializeField] private int m_InitialAsteroidCount = 100;          // The number of asteroids present at the start.
+	// Unused
+	//[SerializeField] private int m_InitialAsteroidCount = 100;          // The number of asteroids present at the start.
 	[SerializeField] private float m_AsteroidSpawnZoneRadius = 120f;    // The radius of the sphere in which the asteroids spawn.
-	[SerializeField] private float m_RingSpawnZoneRadius = 50f;         // The radius of the sphere in which the rings spawn.
+	// Unused
+	//[SerializeField] private float m_RingSpawnZoneRadius = 50f;         // The radius of the sphere in which the rings spawn.
 	[SerializeField] private float m_SpawnZoneDistance = 500f;          // The distance from the camera of the spawn spheres.
 	[SerializeField] private GameObject m_AsteroidObject;               // The the asteroids.
 	[SerializeField] private GameObject m_RingObject;                   // The the rings.

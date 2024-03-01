@@ -14,7 +14,8 @@ namespace VRStandardAssets.Flyer
     public class FlyerMovementController : MonoBehaviour
     {
         [SerializeField] private float m_DistanceFromCamera = 75f;  // The distance from the camera the ship aims to be.
-        [SerializeField] private float m_Speed = 100f;              // The speed the ship moves forward.
+        // Unused
+        //[SerializeField] private float m_Speed = 100f;              // The speed the ship moves forward.
         [SerializeField] private float m_Damping = 0.5f;            // The amount of damping applied to the movement of the ship.
         [SerializeField] private Transform m_Flyer;                 // Reference to the transform of the flyer.
         [SerializeField] private Transform m_TargetMarker;          // The transform the flyer is moving towards.
