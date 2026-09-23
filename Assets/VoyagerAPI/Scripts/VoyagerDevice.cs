@@ -1,20 +1,28 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.XR;
+using UnityEngine.XR.WSA;
+
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 
 namespace Positron
 {
 	public static class VoyagerDefaults
 	{
-		public const string apiVersion = "2.1.2";
+		public const string apiVersion = "1.3.0";
 
 		// Connection defaults
 		public const string localHostIP = "127.0.0.1";
-		public const int tcpPort = 61557;
+		public const int udpSendPort = 61557;
+		public const int udpRecvPort = 7755;
+
+		// Time interval ( in milliseconds ) between processing received packets tick().
+		public const float processRecvPacketsTickMS = 15;
 	}
 
 	// Device Play State Id.
@@ -24,9 +32,7 @@ namespace Positron
 
 	public delegate void VoyagerPlayStateEventDelegate( VoyagerDevicePlayState InState );
 
-    public delegate void VoyagerContentChangeEventDelegate(string InUrl);
-
-    public delegate void VoyagerMotionProfileEventDelegate( string InProfile );
+	public delegate void VoyagerMotionProfileEventDelegate( string InProfile );
 
 	public delegate void VoyagerToggleEventDelegate( bool InValue );
 
@@ -61,15 +67,19 @@ namespace Positron
 		}
 
 		static public Transform cameraMain;
-		
-		private Telepathy.Client client = new Telepathy.Client(5 * 1024);
 
-        public static Action OnConnected;
-        public static Action OnDisconnected;
-
-        private int lastRecvPacketId = -1;
+		private IPEndPoint remoteEndPoint;
+		private UdpClient receiveClient;
+		private UdpClient sendClient;
+		private Thread receiveThread;
+        private volatile bool shutdownRequested;
+        private bool stopRequested;
+        private int cleanupStarted;
+        private Coroutine receiveProcessor;
+		private int lastRecvPacketId = -1;
 		private string lastSentJsonPktStr;							// Packet string is cached to prevent GC cleanup on each SendData() call.
 		private byte[] lastSentJsonPktBytes = new byte[ 5 * 1024 ];	// Packet bytes fixed size & cached to prevent GC cleanup on each SendData() call.
+		private Queue<VoyagerDevicePacket> recvPacketsQueue = new Queue<VoyagerDevicePacket>();
 
 		private VoyagerDevicePacket lastRecvDevicePacket = new VoyagerDevicePacket();
 		public static VoyagerDevicePacket LastRecvDevicePacket
@@ -79,12 +89,8 @@ namespace Positron
 
 		static public VoyagerDevicePacket deviceState = new VoyagerDevicePacket();
 
-		private Coroutine reconnectCoroutine = null;
-
-		public static bool IsConnected 
-		{
-			get { return Instance.client.Connected; }
-		}
+		// Used to lock when editing data members while receiving or processing packet data
+		private System.Object criticalSection = new System.Object();
 
 		/********************************************************
 		 *  Device Interface
@@ -106,8 +112,7 @@ namespace Positron
 		static public event VoyagerEventDelegate OnFastForward;
 		static public event VoyagerEventDelegate OnRewind;
 		static public event VoyagerMotionProfileEventDelegate OnMotionProfileChange;
-        static public event VoyagerContentChangeEventDelegate OnContentChange;
-        static public event VoyagerToggleEventDelegate OnUserPresentToggle;
+		static public event VoyagerToggleEventDelegate OnUserPresentToggle;
 		static public event VoyagerToggleEventDelegate OnSixDofPresentToggle;
 
 		// The current state used by the Interface.  State.Stop, State.Play, State.Pause
@@ -134,7 +139,7 @@ namespace Positron
 		// startMotionTime = float, the time the motion profile started
 		static private float _motionProfileStartTime = 0f;
 
-		// Variables received from TCP //
+		// Variables received from UDP //
 
 		// paused = bool, is the Interface paused or not
 		static private bool _isPaused = true;
@@ -248,6 +253,7 @@ namespace Positron
 			get{ return _motionProfile; }
 		}
 
+		#if UNITY_2019_3_OR_NEWER
 		// xrDisplaySubsystems = List<XRDisplaySubsystem>, used to track user presence
 		static private List<XRDisplaySubsystem> _xrDisplaySubsystems = new List<XRDisplaySubsystem>();
 		static public List<XRDisplaySubsystem> xrDisplaySubsystems
@@ -261,8 +267,9 @@ namespace Positron
 		static private List<InputDevice> inputDevices = new List<InputDevice>();
 		static private bool hasSixDof = false;
 		static private InputTrackingState inputTrackingState;
+		#endif
 
-		// Call in Awake to initialize the Device-Interface correctly. 
+		// Call in Awake to initialize the Device-Interface correctly.
 		public static void Init(VoyagerDeviceConfig config)
 		{
 			if( IsInitialized )
@@ -271,88 +278,47 @@ namespace Positron
 				return;
 			}
 
-            // Use Debug.Log functions for Telepathy so we can see it in the console
-            Telepathy.Log.Info = Debug.Log;
-            Telepathy.Log.Warning = Debug.LogWarning;
-            Telepathy.Log.Error = Debug.LogError;
+			Instance._config = config;
 
-            // Hook up telepathy events
-            Instance.client.OnConnected += Instance.OnClientConnected;
-            Instance.client.OnData += Instance.ReceiveData;
-			Instance.client.OnDisconnected += Instance.OnClientDisconnected;
-
-            Instance._config = config;
-
-            // Initialize sending and receiving packets with Voyager
-            Debug.Log("VoyagerDevice >> Initializing...");
-            IPAddress remoteIP;
-            if (IPAddress.TryParse(Config.ipAddr, out remoteIP))
-            {
-                Debug.Log("VoyagerDevice >> Connecting to: " + Config.ipAddr + ":" + Config.portNum);
-
-                // Telepathy also starts the receive thread here
-                Instance.client.Connect(Config.ipAddr, Config.portNum);
-
-                Debug.Log("VoyagerDevice >> Initialized Voyager API v" + VoyagerDefaults.apiVersion);
-				_isInitialized = true;
-            }
-            else
-            {
-                Debug.LogError("VoyagerDevice >> Init Failed: IP address is not valid! " + Config.ipAddr);
-            }
-        }
-		private void OnClientConnected()
-		{
-			Debug.Log("VoyagerDevice >> Telepathy Event: Client Connected");
-
-			OnConnected?.Invoke();
-        }
-		private void OnClientDisconnected()
-		{
-			Debug.Log("VoyagerDevice >> Telepathy Event: Client Disconnected");
-
-            // Reset last received packet since if PSM has restarted it will start at 0 again.
-            lastRecvPacketId = -1;
-
-            OnDisconnected?.Invoke(); 
-
-			if(reconnectCoroutine == null)
+			// Initialize sending and receiving packets with Voyager
+			Debug.Log("VoyagerDevice >> Initializing...");
+			IPAddress remoteIP;
+			if( IPAddress.TryParse(Config.ipAddr, out remoteIP))
 			{
-                reconnectCoroutine = StartCoroutine(RetryConnect());
+				Instance.remoteEndPoint = new IPEndPoint(remoteIP, Config.sendPortNum);
+				Instance.sendClient = new UdpClient();
+				Debug.Log("VoyagerDevice >> Created UDP sendClient | Sending to " + Config.ipAddr + ":" + Config.sendPortNum);
+
+				Instance.receiveClient = new UdpClient(Config.recvPortNum);
+                // Closing the socket normally wakes Receive; the timeout also bounds cancellation checks.
+                Instance.receiveClient.Client.ReceiveTimeout = 250;
+				Instance.receiveThread = new Thread(Instance.ReceiveData);
+                Instance.receiveThread.IsBackground = true;
+				Instance.receiveThread.Start();
+				Debug.Log("VoyagerDevice >> Created UDP receiveClient | Receiving on any ip port: " + Config.recvPortNum);
+
+                Instance.receiveProcessor = Instance.StartCoroutine(Instance.OnProcessRecvPacketsTick());
+
+				_isInitialized = true;
+				Debug.Log("VoyagerDevice >> Initialized Voyager API v" + VoyagerDefaults.apiVersion);
+			}
+			else
+			{
+				Debug.LogError("VoyagerDevice >> Init Failed: IP address is not valid! " + Config.ipAddr);
 			}
 		}
 
-		IEnumerator RetryConnect()
-		{
-            while (!client.Connected)
-            {
-				if(!client.Connecting && client.ReceivePipeCount == 0)
-				{
-					Debug.Log("VoyagerDevice >> Attempting to reconnect to: " + Config.ipAddr + " "+ Config.portNum);
-					client.Connect(Config.ipAddr, Config.portNum);
-				}
-				yield return new WaitForSecondsRealtime(2.0f);
-            }
-			reconnectCoroutine = null;
-        }
-
-		// Send latest DeviceState data through client */
+		// Send latest DeviceState data through sendClient */
 		public static void SendData()
 		{
 			try
 			{
-				if( !IsInitialized ) { throw new Exception("VoyagerDevice >> DeviceInterface is NOT initialized; Call Init( VoyagerDeviceConfig ) first!"); }
-				if( !IsConnected ) 
-				{ 
-					Debug.LogWarning("VoyagerDevice >> Trying to SendData, but the connection is lost or trying to connect. Check for VoyagerDevice.IsConnected?");
-					return;
-				}
+                if (!IsInitialized || _instance == null || _instance.shutdownRequested) return;
 
 				VoyagerDeviceUtils.DevicePacketToJson(deviceState, out Instance.lastSentJsonPktStr);
 				int numJSONChars = Instance.lastSentJsonPktStr.Length;
 				int numBytes = Encoding.UTF8.GetBytes(Instance.lastSentJsonPktStr, 0, numJSONChars, Instance.lastSentJsonPktBytes, 0);
-				
-                Instance.client.Send(new ArraySegment<byte>(Instance.lastSentJsonPktBytes, 0, numBytes));
+				Instance.sendClient.Send(Instance.lastSentJsonPktBytes, numBytes, Instance.remoteEndPoint);
 				// print(Instance.lastSentJsonPktStr);
 			}
 			catch( Exception err ) {
@@ -360,106 +326,73 @@ namespace Positron
 			}
 		}
 
-        // Receive data from Voyager
-        private void ReceiveData(ArraySegment<byte> data)
+		// Receive thread from Voyager
+		private void ReceiveData()
 		{
-			string text = Encoding.UTF8.GetString(data);
-			VoyagerDevicePacket receivedPacket;
-			VoyagerDeviceUtils.JsonToDevicePacket(text, out receivedPacket);
-
-			if(receivedPacket == null )
+            // Keep a stable reference while the main thread closes and clears the field.
+            UdpClient client = receiveClient;
+            while (!shutdownRequested)
 			{
-				Debug.LogWarning("VoyagerDevice >> Json object not created.");
-				return;
-            }
-
-			// Although we are using TCP, packets from PSM to utility are UDP and the utility is currently just a relay.
-			// Check for out-of-order UDP packet Recv
-			if (lastRecvPacketId > -1 && receivedPacket.ID <= lastRecvPacketId)
-			{
-				Debug.LogWarning("VoyagerDevice >> Rejecting out-of-order packet ID '" + receivedPacket.ID + "'");
-			}
-			else
-			{
-				// Track prev params
-				_prevDeviceMotionProfileTime = _deviceMotionProfileTime;
-				_previousContentUrl = _contentUrl;
-
-				// Update params
-				_deviceMotionProfileTime = receivedPacket.@event.timePosition;
-				_isInLibrary = receivedPacket.@event.library;
-				_stereoscopyMode = receivedPacket.@event.stereoscopy;
-				_contentUrl = receivedPacket.@event.url;
-
-				if (_previousContentUrl != _contentUrl)
+				try
 				{
-					OnContentChange?.Invoke(_contentUrl);
-				}
+					IPEndPoint anyIP = new IPEndPoint(IPAddress.Any, 0);
+                    byte[] data = client.Receive(ref anyIP);
+                    if (shutdownRequested) break;
+					string text = Encoding.UTF8.GetString(data);
+					VoyagerDevicePacket newPacket;
+					VoyagerDeviceUtils.JsonToDevicePacket(text, out newPacket);
 
-				// Handle Motion profile change
-				if (receivedPacket.@event.motionProfile != _motionProfile && !string.IsNullOrEmpty(receivedPacket.@event.motionProfile))
-				{
-					SetMotionProfile(receivedPacket.@event.motionProfile);
-				}
-
-				// Handle Recenter
-				if (receivedPacket.@event.recenter)
-				{
-					Recenter();
-				}
-				else
-				{
-					_isRecentering = false;
-				}
-
-				// Handle state events
-				if (receivedPacket.@event.stop)
-				{
-					Stop();
-				}
-				else
-				{
-					// In previous versions we used to ignore Play & Pause Commands if the Content URL was empty.
-					// Now we no longer check this URL, which will make testing a lot easier.
-					// if(	!string.IsNullOrEmpty(receivedPacket.@event.url) && IsContentLoaded )
-					if (IsContentLoaded)
+					if( newPacket != null )
 					{
-						if (receivedPacket.@event.playPause == IsPaused)
+						lock (criticalSection)
 						{
-							PlayPause();
+                            if (shutdownRequested) break;
+							// Check for out-of-order UDP packet Recv
+							if( lastRecvPacketId > -1 && newPacket.ID <= lastRecvPacketId )
+							{
+								Debug.Log("Interface >> Rejecting out-of-order packet ID '" + newPacket.ID + "'");
+							}
+							else
+							{
+								// We Queue received packet(s) so that we can process all state changes
+								// sent from the Device, on the main Gameplay thread.
+								const int RecvQueueSizeLimit = 32;
+								if( recvPacketsQueue.Count >= RecvQueueSizeLimit )
+								{
+									Debug.Log("Interface >> Exceeded received packet Queue limit '" + RecvQueueSizeLimit + "'");
+									recvPacketsQueue.Dequeue();
+								}
+								recvPacketsQueue.Enqueue(newPacket);
+
+								lastRecvDevicePacket = newPacket;
+								lastRecvPacketId = newPacket.ID;
+
+								// Debug.Log( "VoyagerDevice >> Received packet ID '%d' " +newPacket.ID );
+							}
 						}
-
-						if (PlayState == VoyagerDevicePlayState.Stop)
-						{
-							Pause();
-						}
-					}
-
-					if (receivedPacket.@event.mute != IsMuted)
-					{
-						ToggleMute();
-					}
-
-					if (receivedPacket.@event.forward)
-					{
-						FastForward();
-					}
-					else if (receivedPacket.@event.rewind)
-					{
-						Rewind();
 					}
 					else
 					{
-						_isFastForwarding = false;
-						_isRewinding = false;
+						Debug.Log( "Json object not created.");
 					}
 				}
-
-				Instance.lastRecvDevicePacket = receivedPacket;
-				lastRecvPacketId = receivedPacket.ID;
-
-				_isUpdated = true;
-				// Debug.Log( "VoyagerDevice >> Received packet ID '%d' " +newPacket.ID );	
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+                catch (SocketException err)
+                {
+                    if (shutdownRequested) break;
+                    if (err.SocketErrorCode == SocketError.TimedOut || err.SocketErrorCode == SocketError.WouldBlock) continue;
+                    Debug.LogWarning("Voyager receive loop stopped: " + err);
+                    break;
+                }
+				catch( Exception err )
+				{
+                    if (shutdownRequested) break;
+					print(err.ToString());
+                    Thread.Sleep(10); // Avoid a tight error loop on malformed data.
+				}
 			}
 		}
 
@@ -479,6 +412,7 @@ namespace Positron
 		// Play the motion profile, sets Interface.paused to false
 		static public void Play()
 		{
+            if (_instance != null && _instance.stopRequested) return;
 			if( IsInitialized )
 			{
 				_isPaused = false;
@@ -502,6 +436,7 @@ namespace Positron
 		// Pause the motion profile, sets the Interface.paused to true
 		static public void Pause()
 		{
+            if (_instance != null && _instance.stopRequested) return;
 			if( IsInitialized )
 			{
 				_isPaused = true;
@@ -525,6 +460,7 @@ namespace Positron
 		// Set the Voyager to Idle state.
 		static public void Idle()
 		{
+            if (_instance != null && _instance.stopRequested) return;
 			if( IsInitialized )
 			{
 				_isPaused = true;
@@ -548,21 +484,26 @@ namespace Positron
 		// Stops the motion profile and sends data to Voyager telling it the motion is stopped, sets Interface.paused to true
 		static public void Stop()
 		{
+			if (_instance == null || _instance.stopRequested || _instance.shutdownRequested) return;
 			if( IsInitialized )
 			{
+                _instance.stopRequested = true;
 				_isPaused = true;
 
 				var prevState = _playState;
 				_playState = VoyagerDevicePlayState.Stop;
-				NotifyStateChange( prevState );
-
 				deviceState.@event.status = (int)_playState;
 				deviceState.@event.playPause = false;
 				deviceState.@event.stop = true;
 				deviceState.@event.loaded = false;
+                _isContentLoaded = false;
 
 				LoadContent(null);
 				SetMotionProfile(null);
+
+                // Publish final state before a subscriber begins shutting down networking.
+                Debug.Log("[Voyager Shutdown] Final stopped status sent.");
+                NotifyStateChange(prevState);
 
 				Debug.Log("VoyagerDevice >> | command | 'Stop'");
 			}
@@ -954,18 +895,115 @@ namespace Positron
 			}
 		}
 
+		IEnumerator OnProcessRecvPacketsTick()
+		{
+            float tickRate = Mathf.Max(10, VoyagerDefaults.processRecvPacketsTickMS) * 0.001f;
+            while (!shutdownRequested && !stopRequested)
+			{
+                VoyagerDevicePacket[] packets;
+				lock (criticalSection)
+				{
+                    packets = recvPacketsQueue.ToArray();
+                    recvPacketsQueue.Clear();
+                }
+                _isUpdated = packets.Length > 0;
+                foreach (VoyagerDevicePacket receivedPacket in packets)
+						{
+                    if (shutdownRequested || stopRequested) yield break;
+							// Track prev params
+							_prevDeviceMotionProfileTime = _deviceMotionProfileTime;
+							_previousContentUrl = _contentUrl;
+
+							// Update params
+							_deviceMotionProfileTime = receivedPacket.@event.timePosition;
+							_isInLibrary = receivedPacket.@event.library;
+							_stereoscopyMode = receivedPacket.@event.stereoscopy;
+							_contentUrl = receivedPacket.@event.url;
+
+							// Handle Motion profile change
+							if( receivedPacket.@event.motionProfile != _motionProfile )
+							{
+								SetMotionProfile( receivedPacket.@event.motionProfile );
+							}
+
+							// Handle Recenter
+							if( receivedPacket.@event.recenter )
+							{
+								Recenter();
+							}
+							else
+							{
+								_isRecentering = false;
+							}
+
+							// Handle state events
+							if( receivedPacket.@event.stop )
+							{
+								Stop();
+							}
+							else
+							{
+								// In previous versions we used to ignore Play & Pause Commands if the Content URL was empty.
+								// Now we no longer check this URL, which will make testing a lot easier.
+								// if(	!string.IsNullOrEmpty(receivedPacket.@event.url) && IsContentLoaded )
+								if( IsContentLoaded )
+								{
+									if( receivedPacket.@event.playPause == IsPaused )
+									{
+										PlayPause();
+									}
+
+									if( PlayState == VoyagerDevicePlayState.Stop )
+									{
+										Pause();
+									}
+								}
+
+								if( receivedPacket.@event.mute != IsMuted )
+								{
+									ToggleMute();
+								}
+
+								if( receivedPacket.@event.forward )
+								{
+									FastForward();
+								}
+								else if( receivedPacket.@event.rewind )
+								{
+									Rewind();
+								}
+								else
+								{
+									_isFastForwarding = false;
+									_isRewinding = false;
+								}
+							}
+
+
+				}
+				yield return new WaitForSecondsRealtime(tickRate);
+			}
+		}
 		public static bool IsPresent()
 		{
-			bool isUserPresent = false;
-			InputDevice headset = InputDevices.GetDeviceAtXRNode(XRNode.Head);
-			if (headset.isValid)
+			#if UNITY_2019_3_OR_NEWER
+			_xrDisplaySubsystems.Clear();
+			SubsystemManager.GetInstances<XRDisplaySubsystem>(_xrDisplaySubsystems);
+			foreach (var xrDisplay in _xrDisplaySubsystems)
 			{
-				headset.TryGetFeatureValue(CommonUsages.userPresence, out isUserPresent);
+				if (xrDisplay.running)
+				{
+					return true;
+				}
 			}
-			return isUserPresent;
-        }
+			return false;
+			#else
+			return XRDevice.isPresent && (XRDevice.userPresence == UserPresenceState.Present);
+			#endif
+		}
 
 		public static bool SixDofPresence() {
+			#if UNITY_2019_3_OR_NEWER
 			inputDevices.Clear();
 			InputDevices.GetDevicesWithCharacteristics(sixDofFilter, inputDevices);
 
@@ -989,22 +1027,21 @@ namespace Positron
 			}
 
 			return false;
+			#else
+			return WorldManager.state == PositionalLocatorState.Active;
+			#endif
 		}
 
 		private void Update()
 		{
-            // API users might poll for IsUpdated to detect changes that don't have events, but an event in ReceiveData might be better in a refactor.
-            // client.Tick could fire ReceiveData if it has data, which could set _isUpdated to true 
-            _isUpdated = false;
-			client.Tick(100);
-
+            if (shutdownRequested) return;
 			// Auto-set certain parameters
 			SetUserPresent(IsPresent() && XRSettings.enabled);
 
 			SetSixDofPresent(SixDofPresence());
-        }
+		}
 
-        void OnApplicationQuit()
+		void OnApplicationQuit()
 		{
 			Cleanup();
 		}
@@ -1012,28 +1049,44 @@ namespace Positron
 		void OnDestroy()
 		{
 			Cleanup();
+            if (_instance == this) _instance = null;
 		}
 
-		void Cleanup()
+        // Main-thread entry point. Never instantiate a device just to shut one down.
+        public static void Shutdown()
 		{
-            client.OnConnected = null;
-            client.OnData = null;
-            client.OnDisconnected = null;
+            if (_instance != null) _instance.Cleanup();
+        }
 
-			if(reconnectCoroutine != null)
+        void Cleanup()
 			{
-				StopCoroutine(reconnectCoroutine);
-				reconnectCoroutine = null;
-            }
-
-            client.Disconnect();
+            if (Interlocked.Exchange(ref cleanupStarted, 1) != 0) return;
+            Debug.Log("[Voyager Shutdown] Cancelling receiver.");
+            shutdownRequested = true;
+            if (_instance == this) _isInitialized = false;
+            if (receiveProcessor != null)
+				{
+                StopCoroutine(receiveProcessor);
+                receiveProcessor = null;
+			}
+            try { receiveClient?.Close(); }
+            catch (Exception err) { Debug.LogWarning("[Voyager Shutdown] Receive socket close: " + err.Message); }
+            // No packet-queue lock is held while waiting for the worker.
+            if (receiveThread != null && receiveThread != Thread.CurrentThread && receiveThread.IsAlive)
+			{
+                if (!receiveThread.Join(1000))
+                    Debug.LogWarning("[Voyager Shutdown] Receiver did not exit within 1 second; continuing shutdown.");
+			}
+            receiveThread = null;
+			receiveClient = null;
+            try { sendClient?.Close(); }
+            catch (Exception err) { Debug.LogWarning("[Voyager Shutdown] Send socket close: " + err.Message); }
+            sendClient = null;
 
 			if( _instance == this )
 			{
-				_instance = null;
-
-				OnConnected = null;
-				OnDisconnected = null;
+                // Retain the stopped instance until Unity destroys it; UI getters must not
+                // accidentally create another device during the final frame.
 
 				OnPlayStateChange = null;
 				OnPlay = null;
@@ -1044,12 +1097,14 @@ namespace Positron
 				OnFastForward = null;
 				OnRewind = null;
 				OnMotionProfileChange = null;
-				OnContentChange = null;
+                OnUserPresentToggle = null;
+                OnSixDofPresentToggle = null;
 
 				_isInitialized = false;
 			}
 
 			lastRecvDevicePacket = null;
+            Debug.Log("[Voyager Shutdown] Networking cleanup complete.");
 		}
 	}
 }

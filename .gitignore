@@ -31,7 +31,6 @@ Logs/*
 Obj/*
 Screenshots/*
 Temp/*
-UserSettings/*
 
 ## Visual Studio
 *.sln

@@ -15,6 +15,7 @@ public class TimeDilationClip : PlayableAsset, ITimelineClipAsset
 
     public override Playable CreatePlayable (PlayableGraph graph, GameObject owner)
     {
-        return ScriptPlayable<TimeDilationBehaviour>.Create (graph, template);
+        var playable = ScriptPlayable<TimeDilationBehaviour>.Create (graph, template);
+        return playable;
     }
 }

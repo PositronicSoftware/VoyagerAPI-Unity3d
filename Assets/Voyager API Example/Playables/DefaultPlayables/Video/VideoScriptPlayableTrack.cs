@@ -7,6 +7,7 @@ namespace UnityEngine.Timeline
 {
 	[Serializable]
     [TrackClipType(typeof(VideoScriptPlayableAsset))]
+    [TrackMediaType(TimelineAsset.MediaType.Script)]
     [TrackColor(0.008f, 0.698f, 0.655f)]
     public class VideoScriptPlayableTrack : TrackAsset
 	{
