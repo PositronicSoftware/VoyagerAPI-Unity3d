@@ -529,6 +529,7 @@ namespace Positron
 
 		void Update()
 		{
+            if (isExiting) return;
 			if( VoyagerDevice.Instance == null || !VoyagerDevice.IsInitialized )
 			{
 				return;
@@ -659,24 +660,40 @@ namespace Positron
 
 		public void ExitApp()
 		{
+            if (isExiting) return;
+            isExiting = true;
+            Debug.Log("[Voyager Shutdown] Exit requested.");
+            if (VoyagerDevice.IsInitialized && VoyagerDevice.PlayState != VoyagerDevicePlayState.Stop)
 			VoyagerDevice.Stop();
-
-			ScreenFadeOut();
-
 			StartCoroutine(DoQuitApp());
 		}
 
+        private bool isExiting;
+
 		IEnumerator DoQuitApp()
 		{
+            // Leave the packet callback before closing sockets/stopping its coroutine.
+            yield return null;
+            if (timelineControl != null && timelineControl.CurrentTrack != null)
+                timelineControl.CurrentTrack.Pause();
+            AudioListener.pause = true;
+            Debug.Log("[Voyager Shutdown] Playback paused; fading out.");
 			Time.timeScale = 1f;
-
+            ScreenFadeOut();
 			if( screenFader != null )
 			{
-				yield return new WaitForSeconds(screenFader.fadeTime);
+                float delay = screenFader.fadeTime;
+                if (!float.IsNaN(delay) && !float.IsInfinity(delay) && delay > 0f)
+                    yield return new WaitForSecondsRealtime(Mathf.Min(delay, 10f));
 			}
-
+            VoyagerDevice.Shutdown();
 			Debug.Log( "~ APP QUIT ~" );
+#if UNITY_EDITOR
+            AudioListener.pause = false;
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
 			Application.Quit();
+#endif
 		}
 	}
 }

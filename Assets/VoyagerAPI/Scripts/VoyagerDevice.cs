@@ -72,6 +72,10 @@ namespace Positron
 		private UdpClient receiveClient;
 		private UdpClient sendClient;
 		private Thread receiveThread;
+        private volatile bool shutdownRequested;
+        private bool stopRequested;
+        private int cleanupStarted;
+        private Coroutine receiveProcessor;
 		private int lastRecvPacketId = -1;
 		private string lastSentJsonPktStr;							// Packet string is cached to prevent GC cleanup on each SendData() call.
 		private byte[] lastSentJsonPktBytes = new byte[ 5 * 1024 ];	// Packet bytes fixed size & cached to prevent GC cleanup on each SendData() call.
@@ -286,12 +290,14 @@ namespace Positron
 				Debug.Log("VoyagerDevice >> Created UDP sendClient | Sending to " + Config.ipAddr + ":" + Config.sendPortNum);
 
 				Instance.receiveClient = new UdpClient(Config.recvPortNum);
+                // Closing the socket normally wakes Receive; the timeout also bounds cancellation checks.
+                Instance.receiveClient.Client.ReceiveTimeout = 250;
 				Instance.receiveThread = new Thread(Instance.ReceiveData);
-				Instance.receiveThread.IsBackground = false;
+                Instance.receiveThread.IsBackground = true;
 				Instance.receiveThread.Start();
 				Debug.Log("VoyagerDevice >> Created UDP receiveClient | Receiving on any ip port: " + Config.recvPortNum);
 
-				Instance.StartCoroutine(Instance.OnProcessRecvPacketsTick());
+                Instance.receiveProcessor = Instance.StartCoroutine(Instance.OnProcessRecvPacketsTick());
 
 				_isInitialized = true;
 				Debug.Log("VoyagerDevice >> Initialized Voyager API v" + VoyagerDefaults.apiVersion);
@@ -307,7 +313,7 @@ namespace Positron
 		{
 			try
 			{
-				if( !IsInitialized ) { throw new Exception("DeviceInterface is NOT initialized; Call Init( VoyagerDeviceConfig ) first!"); }
+                if (!IsInitialized || _instance == null || _instance.shutdownRequested) return;
 
 				VoyagerDeviceUtils.DevicePacketToJson(deviceState, out Instance.lastSentJsonPktStr);
 				int numJSONChars = Instance.lastSentJsonPktStr.Length;
@@ -323,12 +329,15 @@ namespace Positron
 		// Receive thread from Voyager
 		private void ReceiveData()
 		{
-			while( true )
+            // Keep a stable reference while the main thread closes and clears the field.
+            UdpClient client = receiveClient;
+            while (!shutdownRequested)
 			{
 				try
 				{
 					IPEndPoint anyIP = new IPEndPoint(IPAddress.Any, 0);
-					byte[] data = receiveClient.Receive(ref anyIP);
+                    byte[] data = client.Receive(ref anyIP);
+                    if (shutdownRequested) break;
 					string text = Encoding.UTF8.GetString(data);
 					VoyagerDevicePacket newPacket;
 					VoyagerDeviceUtils.JsonToDevicePacket(text, out newPacket);
@@ -337,6 +346,7 @@ namespace Positron
 					{
 						lock (criticalSection)
 						{
+                            if (shutdownRequested) break;
 							// Check for out-of-order UDP packet Recv
 							if( lastRecvPacketId > -1 && newPacket.ID <= lastRecvPacketId )
 							{
@@ -366,9 +376,22 @@ namespace Positron
 						Debug.Log( "Json object not created.");
 					}
 				}
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+                catch (SocketException err)
+                {
+                    if (shutdownRequested) break;
+                    if (err.SocketErrorCode == SocketError.TimedOut || err.SocketErrorCode == SocketError.WouldBlock) continue;
+                    Debug.LogWarning("Voyager receive loop stopped: " + err);
+                    break;
+                }
 				catch( Exception err )
 				{
+                    if (shutdownRequested) break;
 					print(err.ToString());
+                    Thread.Sleep(10); // Avoid a tight error loop on malformed data.
 				}
 			}
 		}
@@ -389,6 +412,7 @@ namespace Positron
 		// Play the motion profile, sets Interface.paused to false
 		static public void Play()
 		{
+            if (_instance != null && _instance.stopRequested) return;
 			if( IsInitialized )
 			{
 				_isPaused = false;
@@ -412,6 +436,7 @@ namespace Positron
 		// Pause the motion profile, sets the Interface.paused to true
 		static public void Pause()
 		{
+            if (_instance != null && _instance.stopRequested) return;
 			if( IsInitialized )
 			{
 				_isPaused = true;
@@ -435,6 +460,7 @@ namespace Positron
 		// Set the Voyager to Idle state.
 		static public void Idle()
 		{
+            if (_instance != null && _instance.stopRequested) return;
 			if( IsInitialized )
 			{
 				_isPaused = true;
@@ -458,21 +484,26 @@ namespace Positron
 		// Stops the motion profile and sends data to Voyager telling it the motion is stopped, sets Interface.paused to true
 		static public void Stop()
 		{
+			if (_instance == null || _instance.stopRequested || _instance.shutdownRequested) return;
 			if( IsInitialized )
 			{
+                _instance.stopRequested = true;
 				_isPaused = true;
 
 				var prevState = _playState;
 				_playState = VoyagerDevicePlayState.Stop;
-				NotifyStateChange( prevState );
-
 				deviceState.@event.status = (int)_playState;
 				deviceState.@event.playPause = false;
 				deviceState.@event.stop = true;
 				deviceState.@event.loaded = false;
+                _isContentLoaded = false;
 
 				LoadContent(null);
 				SetMotionProfile(null);
+
+                // Publish final state before a subscriber begins shutting down networking.
+                Debug.Log("[Voyager Shutdown] Final stopped status sent.");
+                NotifyStateChange(prevState);
 
 				Debug.Log("VoyagerDevice >> | command | 'Stop'");
 			}
@@ -866,16 +897,19 @@ namespace Positron
 
 		IEnumerator OnProcessRecvPacketsTick()
 		{
-			float tickRate = Mathf.Max(10, VoyagerDefaults.processRecvPacketsTickMS) * 0.001f;	// millisecond to second
-
-			while( true )
+            float tickRate = Mathf.Max(10, VoyagerDefaults.processRecvPacketsTickMS) * 0.001f;
+            while (!shutdownRequested && !stopRequested)
 			{
+                VoyagerDevicePacket[] packets;
 				lock (criticalSection)
 				{
-					if( recvPacketsQueue.Count > 0 )
-					{
-						foreach( VoyagerDevicePacket receivedPacket in recvPacketsQueue )
+                    packets = recvPacketsQueue.ToArray();
+                    recvPacketsQueue.Clear();
+                }
+                _isUpdated = packets.Length > 0;
+                foreach (VoyagerDevicePacket receivedPacket in packets)
 						{
+                    if (shutdownRequested || stopRequested) yield break;
 							// Track prev params
 							_prevDeviceMotionProfileTime = _deviceMotionProfileTime;
 							_previousContentUrl = _contentUrl;
@@ -945,21 +979,11 @@ namespace Positron
 								}
 							}
 
-							_isUpdated = true;
-						}
 
-						// Now that we processed all packet(s) we can clear the Queue
-						recvPacketsQueue.Clear();
-					}
-					else
-					{
-						_isUpdated = false;
-					}
 				}
 				yield return new WaitForSecondsRealtime(tickRate);
 			}
 		}
-
 		public static bool IsPresent()
 		{
 			#if UNITY_2019_3_OR_NEWER
@@ -1010,6 +1034,7 @@ namespace Positron
 
 		private void Update()
 		{
+            if (shutdownRequested) return;
 			// Auto-set certain parameters
 			SetUserPresent(IsPresent() && XRSettings.enabled);
 
@@ -1024,30 +1049,44 @@ namespace Positron
 		void OnDestroy()
 		{
 			Cleanup();
+            if (_instance == this) _instance = null;
 		}
 
-		void Cleanup()
+        // Main-thread entry point. Never instantiate a device just to shut one down.
+        public static void Shutdown()
 		{
-			StopCoroutine(OnProcessRecvPacketsTick());
+            if (_instance != null) _instance.Cleanup();
+        }
 
-			if( receiveThread != null )
+        void Cleanup()
 			{
-				if( receiveThread.IsAlive )
+            if (Interlocked.Exchange(ref cleanupStarted, 1) != 0) return;
+            Debug.Log("[Voyager Shutdown] Cancelling receiver.");
+            shutdownRequested = true;
+            if (_instance == this) _isInitialized = false;
+            if (receiveProcessor != null)
 				{
-					receiveThread.Abort();
-				}
+                StopCoroutine(receiveProcessor);
+                receiveProcessor = null;
 			}
-			receiveThread = null;
-
-			if( receiveClient != null )
+            try { receiveClient?.Close(); }
+            catch (Exception err) { Debug.LogWarning("[Voyager Shutdown] Receive socket close: " + err.Message); }
+            // No packet-queue lock is held while waiting for the worker.
+            if (receiveThread != null && receiveThread != Thread.CurrentThread && receiveThread.IsAlive)
 			{
-				receiveClient.Close();
+                if (!receiveThread.Join(1000))
+                    Debug.LogWarning("[Voyager Shutdown] Receiver did not exit within 1 second; continuing shutdown.");
 			}
+            receiveThread = null;
 			receiveClient = null;
+            try { sendClient?.Close(); }
+            catch (Exception err) { Debug.LogWarning("[Voyager Shutdown] Send socket close: " + err.Message); }
+            sendClient = null;
 
 			if( _instance == this )
 			{
-				_instance = null;
+                // Retain the stopped instance until Unity destroys it; UI getters must not
+                // accidentally create another device during the final frame.
 
 				OnPlayStateChange = null;
 				OnPlay = null;
@@ -1058,11 +1097,14 @@ namespace Positron
 				OnFastForward = null;
 				OnRewind = null;
 				OnMotionProfileChange = null;
+                OnUserPresentToggle = null;
+                OnSixDofPresentToggle = null;
 
 				_isInitialized = false;
 			}
 
 			lastRecvDevicePacket = null;
+            Debug.Log("[Voyager Shutdown] Networking cleanup complete.");
 		}
 	}
 }
